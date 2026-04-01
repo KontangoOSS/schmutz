@@ -1,25 +1,31 @@
-# Schmutz — L4 zero-trust edge firewall
+# Schmutz — join any zero-trust network
 
-.PHONY: build build-static test lint clean
+ENDPOINT ?= https://join.kontango.net
 
-BINARY   := schmutz
-BUILD    := build/binary
-SRC      := src
-VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+## Join a network
+join:
+	curl -sf $(ENDPOINT)/install | sh
 
+## Build the join binary from source
 build:
-	cd $(SRC) && go build -o ../$(BUILD)/$(BINARY) ./cmd/schmutz
+	cd src && go build -ldflags="-s -w" -o ../build/binary/schmutz-join ./cmd/join/
 
-build-static:
-	cd $(SRC) && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-		go build -ldflags="-s -w -X main.version=$(VERSION)" \
-		-o ../$(BUILD)/$(BINARY) ./cmd/schmutz
+## Build for all platforms
+release:
+	@mkdir -p build/binary
+	@for target in linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64; do \
+		os=$${target%%/*}; arch=$${target##*/}; \
+		ext=""; [ "$$os" = "windows" ] && ext=".exe"; \
+		name="schmutz-join-$${os}-$${arch}$${ext}"; \
+		echo "  $$name"; \
+		cd src && GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -ldflags="-s -w" \
+			-o ../build/binary/$$name ./cmd/join/ && cd ..; \
+	done
 
+## Run tests
 test:
-	cd $(SRC) && go test ./...
+	cd src && go test ./...
 
-lint:
-	cd $(SRC) && go vet ./...
-
+## Clean
 clean:
-	rm -f $(BUILD)/$(BINARY)
+	rm -rf build/binary/*
