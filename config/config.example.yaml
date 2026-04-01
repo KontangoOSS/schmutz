@@ -1,0 +1,86 @@
+# Edge Gateway configuration
+#
+# Each edge node runs this binary with its own Ziti identity.
+# Rules are evaluated top-down. First match wins.
+
+# Ziti identity file for this edge node
+identity: /opt/schmutz/ziti/identity.json
+
+# Listen address for incoming public TLS connections
+listen: ":443"
+
+# BoltDB for local persistent state (JA4 tracking, rate counters, stats)
+# Each edge node has its own DB — no cross-node replication needed.
+# Survives restarts. Same pattern as Ziti router BoltDB.
+store:
+  path: /opt/schmutz/edge-gateway/edge-gateway.db
+
+# Log output
+log:
+  level: info          # debug, info, warn, error
+  format: json         # json or text
+  file: /opt/schmutz/log/edge-gateway.log
+
+# Edge node metadata (injected into every log line)
+node:
+  name: node-1
+  region: us-east
+
+# Connection limits
+limits:
+  max_connections: 10000        # Total concurrent connections
+  per_source_max: 100           # Max concurrent per source IP
+  read_timeout: 10s             # Time to read ClientHello
+  idle_timeout: 300s            # Close idle connections after this
+
+# Classification rules — evaluated in order, first match wins
+rules:
+  # -------------------------------------------------------------------
+  # DROP rules — block before entering the overlay
+  # -------------------------------------------------------------------
+
+  - name: block-scanners
+    comment: "Known scanner JA4 fingerprints — never enter overlay"
+    ja4:
+      - "t13d191000_9dc949149365_e7c285222651"   # zgrab2
+      - "t13d301000_4bfbf6a67c6a_02713d6af862"   # masscan
+      - "t13d201100_1a4191056d07_7a9e3cfa7975"   # nuclei
+    action: drop
+
+  - name: block-no-sni
+    comment: "No SNI = port scanner or misconfigured client"
+    sni: ""
+    action: drop
+
+  # -------------------------------------------------------------------
+  # ROUTE rules — classify and send into the overlay
+  # -------------------------------------------------------------------
+
+  - name: auth
+    comment: "OIDC auth flows — direct to identity provider, no ingress controller hop"
+    sni: "auth.example.io"
+    service: public-auth
+
+  - name: auth-alt
+    comment: "Legacy auth domain"
+    sni: "ztd.example.com"
+    service: public-auth
+
+  - name: zrok-shares
+    comment: "zrok public shares"
+    sni: "*.share.example.io"
+    service: public-zrok
+
+  - name: zrok-ctrl
+    comment: "zrok controller API"
+    sni: "zrok.example.io"
+    service: public-zrok-ctrl
+
+  # -------------------------------------------------------------------
+  # CATCH-ALL — everything else hits the dark service
+  # -------------------------------------------------------------------
+
+  - name: catch-all
+    comment: "Unknown SNI → dark service (honeypot + logging)"
+    sni: "*"
+    service: public-default
