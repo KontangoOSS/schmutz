@@ -542,16 +542,17 @@ never make it past the handshake.
 
 ### 🔧 Advanced Technical Reference
 
-For engineers building on Schmutz, contributing, or just deeply curious:
+For engineers building on Schmutz, contributing, or just deeply curious —
+**[enter if you dare](docs/advanced/README.md)**.
 
-| | |
+| Topic | What's inside |
 |:---|:---|
-| 🧬 &nbsp; [ClientHello Parsing](docs/advanced/clienthello-parsing.md) | Byte-by-byte TLS parsing, JA4 computation, GREASE filtering |
-| 🩹 &nbsp; [HP Algorithm](docs/advanced/hp-algorithm.md) | Drain/heal math, attack simulations, threshold tuning |
-| 🔌 &nbsp; [Ziti Integration](docs/advanced/ziti-integration.md) | SDK usage, dial lifecycle, circuit management, relay bridge |
-| ⚖️ &nbsp; [Rule Engine](docs/advanced/rule-engine.md) | Match semantics, rate limiting, SNI wildcards, rule ordering |
-| 💾 &nbsp; [BoltDB Schema](docs/advanced/boltdb-schema.md) | Bucket layouts, key formats, encoding, compaction |
-| ⚡ &nbsp; [Performance](docs/advanced/performance.md) | Memory/goroutine budgets, bottlenecks, tuning recommendations |
+| 🧬 &nbsp; [TLS Parsing](docs/advanced/README.md#-tls-parsing) | ClientHello byte layout, JA4 fingerprinting, GREASE, ReplayConn |
+| 🩹 &nbsp; [Health Points](docs/advanced/README.md#-health-points) | Levels, drain/heal math, attack simulations, tuning |
+| ⚖️ &nbsp; [Rule Engine](docs/advanced/README.md#%EF%B8%8F-rule-engine) | Match logic, ordering, rate limiting, worked examples |
+| 💾 &nbsp; [Storage](docs/advanced/README.md#-storage) | BoltDB buckets, encoding formats, rate windows |
+| 🔌 &nbsp; [Ziti Overlay](docs/advanced/README.md#-ziti-overlay) | Identity, dial lifecycle, relay bridge, shutdown |
+| ⚡ &nbsp; [Operations](docs/advanced/README.md#-operations) | Memory budget, bottlenecks, tuning |
 
 <br />
 
