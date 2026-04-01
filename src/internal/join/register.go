@@ -83,6 +83,11 @@ type Request struct {
 	HardwareHash  string       `json:"hardware_hash,omitempty"`
 	MACAddrs      []string     `json:"mac_addrs,omitempty"`
 	BrowserRaw    *BrowserData `json:"_browser,omitempty"`
+
+	// Trusted enrollment — Bao AppRole credentials (optional)
+	// If provided, the controller validates against Bao and skips quarantine.
+	RoleID   string `json:"role_id,omitempty"`
+	SecretID string `json:"secret_id,omitempty"`
 }
 
 // Response to the client. Minimal.

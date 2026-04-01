@@ -25,24 +25,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, `schmutz-join v%s — join the network
 
 Usage:
-  schmutz-join <controller-url> [--scan|--manual]
+  schmutz-join <controller-url> [options]
 
-Modes:
-  --scan     Auto-detect everything, confirm, register (default)
-  --manual   Answer questions, we verify against detected values
+Options:
+  --scan              Auto-detect everything, confirm, register (default)
+  --manual            Answer questions, we verify against detected values
+  --role-id=ID        Bao AppRole role-id (trusted enrollment — skips quarantine)
+  --secret-id=ID      Bao AppRole secret-id (required with --role-id)
 
 Example:
   schmutz-join https://join.kontango.net
-  schmutz-join https://join.kontango.net --manual
+  schmutz-join https://join.kontango.net --role-id=xxx --secret-id=yyy
 `, version)
 		os.Exit(1)
 	}
 
 	controllerURL := os.Args[1]
 	mode := "scan"
+	roleID := ""
+	secretID := ""
 	for _, a := range os.Args[2:] {
 		if a == "--manual" {
 			mode = "manual"
+		}
+		if strings.HasPrefix(a, "--role-id=") {
+			roleID = strings.TrimPrefix(a, "--role-id=")
+		}
+		if strings.HasPrefix(a, "--secret-id=") {
+			secretID = strings.TrimPrefix(a, "--secret-id=")
 		}
 	}
 
@@ -74,6 +84,13 @@ Example:
 		req = scanFlow(det, fp)
 	} else {
 		req = manualFlow(det, fp)
+	}
+
+	// Attach Bao credentials if provided (trusted enrollment)
+	if roleID != "" && secretID != "" {
+		req.RoleID = roleID
+		req.SecretID = secretID
+		log.Println("  trusted enrollment (Bao AppRole)")
 	}
 
 	// Register
