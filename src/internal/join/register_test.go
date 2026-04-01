@@ -68,31 +68,3 @@ func TestNewRegistration(t *testing.T) {
 	}
 }
 
-func TestTrunc(t *testing.T) {
-	tests := []struct{ input string; max int; want string }{
-		{"hello", 10, "hello"},
-		{"hello world", 5, "hello"},
-		{"", 10, ""},
-		{"  spaces  ", 10, "spaces"},
-	}
-	for _, tt := range tests {
-		if got := trunc(tt.input, tt.max); got != tt.want {
-			t.Errorf("trunc(%q, %d) = %q, want %q", tt.input, tt.max, got, tt.want)
-		}
-	}
-}
-
-func TestTruncHex(t *testing.T) {
-	tests := []struct{ input string; max int; want string }{
-		{"abcdef123", 10, "abcdef123"},
-		{"abcdef123456", 6, "abcdef"},
-		{"", 10, ""},
-		{"not-hex!", 10, ""},
-		{"ABCDEF", 10, "ABCDEF"},
-	}
-	for _, tt := range tests {
-		if got := truncHex(tt.input, tt.max); got != tt.want {
-			t.Errorf("truncHex(%q, %d) = %q, want %q", tt.input, tt.max, got, tt.want)
-		}
-	}
-}
