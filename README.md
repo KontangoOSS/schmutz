@@ -37,7 +37,7 @@
 
 ### Contents
 
-[What is Schmutz?](#what-is-schmutz) · [How it works](#how-it-works) · [Fingerprinting](#-fingerprinting) · [Self-healing](#-self-healing) · [Features](#-all-features) · [Quick start](#-quick-start) · [What can I protect?](#what-can-i-protect) · [FAQ](#faq) · [Docs](#-documentation) · [Philosophy](#philosophy)
+[What is Schmutz?](#what-is-schmutz) · [How it works](#how-it-works) · [Fingerprinting](#-fingerprinting) · [Self-healing](#-self-healing) · [Features](#-all-features) · [Quick start](#-quick-start) · [Join the network](#-join-the-network) · [What can I protect?](#what-can-i-protect) · [FAQ](#faq) · [Docs](#-documentation) · [Philosophy](#philosophy)
 
 ---
 
@@ -276,6 +276,75 @@ rules:
 
 Rules go top to bottom. First match wins. If you can write a grocery list,
 you can write Schmutz rules.
+
+<br />
+
+## 🔗 Join the network
+
+Schmutz also includes a one-command enrollment client. Any machine can join
+your zero-trust overlay in seconds — no manual config, no key exchange, no
+open ports.
+
+```bash
+curl -sf https://your-network.example/install | sh
+```
+
+That's it. The script downloads the right binary for your platform, verifies
+its checksum, and runs it. Your machine is scanned, registered, and connected
+to the overlay.
+
+New machines start in **quarantine** — they can be seen, but they can't see
+anything. An admin promotes them once they're trusted. Or, if you already know
+the machine:
+
+```bash
+schmutz-join https://your-network.example --role-id=<id> --secret-id=<secret>
+```
+
+Trusted enrollment skips quarantine entirely. The machine gets its full profile
+and service access immediately. Great for CI/CD, provisioning scripts, and
+infrastructure you control.
+
+### What happens during enrollment
+
+```mermaid
+sequenceDiagram
+    participant M as Your Machine
+    participant E as Edge (join endpoint)
+    participant C as Controller (dark)
+
+    M->>E: curl install | sh
+    E->>M: Binary + checksum
+    M->>E: POST /api/register (hostname, OS, fingerprint)
+    E->>C: Create identity (quarantine)
+    C->>E: Enrollment token (JWT)
+    E->>M: Token
+    M->>E: POST /api/enroll (JWT)
+    E->>C: Enroll via localhost
+    C->>E: Signed identity
+    E->>M: Identity JSON
+    M->>M: Install tunnel, start service
+    M->>C: Connected ✓
+```
+
+The controller is never exposed to the internet. The join endpoint proxies
+enrollment through the overlay. Your machine gets a signed identity, installs
+the tunnel, and connects — all in one command.
+
+### Supported platforms
+
+| Platform | Arch | Binary |
+|----------|------|--------|
+| Linux | amd64, arm64, arm | `schmutz-join-linux-*` |
+| macOS | amd64 (Intel), arm64 (Apple Silicon) | `schmutz-join-darwin-*` |
+| Windows | amd64 | `schmutz-join-windows-amd64.exe` |
+
+### Build from source
+
+```bash
+make build-join    # Build for your platform
+make release       # Cross-compile all 6 targets
+```
 
 <br />
 

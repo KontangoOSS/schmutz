@@ -1,10 +1,10 @@
 # Edge Gateway configuration
 #
-# Each DO edge node runs this binary with its own Ziti identity.
+# Each edge node runs this binary with its own Ziti identity.
 # Rules are evaluated top-down. First match wins.
 
 # Ziti identity file for this edge node
-identity: /opt/schmutz/ziti/edge-gw-1.json
+identity: /opt/schmutz/ziti/identity.json
 
 # Listen address for incoming public TLS connections
 listen: ":443"
@@ -24,7 +24,7 @@ log:
 # Edge node metadata (injected into every log line)
 node:
   name: node-1
-  region: nyc3
+  region: us-east
 
 # Connection limits
 limits:
