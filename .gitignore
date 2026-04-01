@@ -1,0 +1,19 @@
+# Build artifacts — distributed via releases, not git
+build/binary/
+*.exe
+
+# Go
+*.test
+*.out
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+*.enc
