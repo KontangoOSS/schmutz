@@ -37,7 +37,7 @@
 
 ### Contents
 
-[What is Schmutz?](#what-is-schmutz) · [How it works](#how-it-works) · [Fingerprinting](#-fingerprinting) · [Self-healing](#-self-healing) · [Features](#-all-features) · [Quick start](#-quick-start) · [What can I protect?](#what-can-i-protect) · [FAQ](#faq) · [Docs](#-documentation) · [Philosophy](#philosophy)
+[What is Schmutz?](#what-is-schmutz) · [How it works](#how-it-works) · [Fingerprinting](#-fingerprinting) · [Self-healing](#-self-healing) · [Features](#-all-features) · [Quick start](#-quick-start) · [FAQ](#faq) · [Docs](#-documentation) · [Advanced](#-advanced-technical-reference) · [Philosophy](#philosophy)
 
 ---
 
@@ -470,6 +470,19 @@ never make it past the handshake.
 | 🔬 &nbsp; [Design](docs/DESIGN.md) | Classification pipeline, relay, HP system, BoltDB schema |
 | 🪪 &nbsp; [Identity Model](docs/IDENTITY.md) | How edge nodes authenticate and what they can access |
 | 📖 &nbsp; [Origin Story](docs/ORIGIN.md) | How Schmutz came to be — and why it's named after dirt |
+
+### 🔧 Advanced Technical Reference
+
+For engineers building on Schmutz, contributing, or just deeply curious:
+
+| | |
+|:---|:---|
+| 🧬 &nbsp; [ClientHello Parsing](docs/advanced/clienthello-parsing.md) | Byte-by-byte TLS parsing, JA4 computation, GREASE filtering |
+| 🩹 &nbsp; [HP Algorithm](docs/advanced/hp-algorithm.md) | Drain/heal math, attack simulations, threshold tuning |
+| 🔌 &nbsp; [Ziti Integration](docs/advanced/ziti-integration.md) | SDK usage, dial lifecycle, circuit management, relay bridge |
+| ⚖️ &nbsp; [Rule Engine](docs/advanced/rule-engine.md) | Match semantics, rate limiting, SNI wildcards, rule ordering |
+| 💾 &nbsp; [BoltDB Schema](docs/advanced/boltdb-schema.md) | Bucket layouts, key formats, encoding, compaction |
+| ⚡ &nbsp; [Performance](docs/advanced/performance.md) | Memory/goroutine budgets, bottlenecks, tuning recommendations |
 
 <br />
 
