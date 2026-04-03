@@ -17,6 +17,10 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		cmdRun(os.Args[2:])
+	case "agent":
+		cmdAgent(os.Args[2:])
+	case "join":
+		cmdJoin(os.Args[2:])
 	case "version":
 		fmt.Println("schmutz", version)
 	case "help", "--help", "-h":
@@ -29,14 +33,17 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`schmutz — zero-trust edge firewall
+	fmt.Println(`schmutz — zero-trust edge firewall + universal machine agent
 
 Commands:
   run          Start the edge gateway (SNI classifier + Ziti relay)
+  agent        Start the universal machine agent (heartbeat + config listener)
   version      Print version
 
 Usage:
-  schmutz run --config /opt/schmutz/config.yaml`)
+  schmutz run --config /opt/schmutz/config.yaml
+  schmutz join https://your-controller.example [--session=TOKEN] [--role-id=ID --secret-id=ID]
+  schmutz agent [--identity /opt/tango/identity.json] [--fallback https://your-controller.example]`)
 }
 
 func cmdRun(args []string) {
