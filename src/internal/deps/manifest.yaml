@@ -1,0 +1,19 @@
+binaries:
+  - name: curl
+    required: true
+  - name: openssl
+    required: true
+  - name: iptables
+    required: false
+
+packages:
+  - name: ca-certificates
+    required: true
+
+kernel_features:
+  - name: tun
+    check: /dev/net/tun
+    required: false
+  - name: tproxy
+    module: xt_TPROXY
+    required: false
