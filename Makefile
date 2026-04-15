@@ -1,6 +1,6 @@
 # Schmutz — L4 zero-trust edge firewall + enrollment client
 
-.PHONY: build build-join release test lint clean help
+.PHONY: build build-join build-bootstrap release release-bootstrap test lint clean help
 
 BINARY   := schmutz
 BUILD    := build/binary
@@ -38,6 +38,16 @@ lint:
 ## Clean build artifacts
 clean:
 	rm -rf $(BUILD)/*
+
+## Build bootstrap binary
+build-bootstrap:
+	cd $(SRC) && go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-bootstrap ./cmd/bootstrap
+
+## Cross-compile bootstrap
+release-bootstrap:
+	@mkdir -p $(BUILD)
+	cd $(SRC) && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-bootstrap-linux-amd64 ./cmd/bootstrap
+	cd $(SRC) && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-bootstrap-linux-arm64 ./cmd/bootstrap
 
 ## Show targets
 help:
