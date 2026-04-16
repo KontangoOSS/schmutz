@@ -85,6 +85,10 @@ func (d *Daemon) Run() error {
 
 	defer func() {
 		cancel()
+		if d.zitiCtx != nil {
+			d.zitiCtx.Close()
+			slog.Info("Ziti context closed")
+		}
 		d.mu.Lock()
 		d.running = false
 		d.mu.Unlock()

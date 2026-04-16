@@ -4,18 +4,21 @@ package register
 import (
 	"bytes"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/KontangoOSS/schmutz/internal/agent"
 	"github.com/KontangoOSS/schmutz/internal/pipeline"
 )
 
 // Step implements the register bootstrap step.
 type Step struct {
-	ApiBase string // override base URL for testing (e.g. mock server URL)
+	ApiBase    string // override base URL for testing
+	MaxRetries int    // enrollment retries (default 3)
 }
 
 // EnrollResponse represents the JSON body returned by POST /enroll.
@@ -29,7 +32,7 @@ type EnrollResponse struct {
 
 // New returns a Step ready for use.
 func New() *Step {
-	return &Step{}
+	return &Step{MaxRetries: 3}
 }
 
 // Name returns the display name of this step.
@@ -43,80 +46,99 @@ func (s *Step) Skip(ctx *pipeline.Context) bool {
 }
 
 // Run enrolls the device by POSTing machine info to the /enroll endpoint.
-// No admin credentials are used — the controller handles authorization server-side.
+// Retries on transient failures. No admin credentials — the controller
+// handles authorization server-side.
 func (s *Step) Run(ctx *pipeline.Context) error {
 	enrollURL := s.enrollURL(ctx)
-
 	fingerprint := machineFingerprint()
 
 	payload := map[string]any{
-		"hostname":   ctx.Hostname,
-		"os":         ctx.OS,
-		"arch":       ctx.Arch,
-		"platform":   ctx.Platform,
+		"hostname":    ctx.Hostname,
+		"os":          ctx.OS,
+		"arch":        ctx.Arch,
+		"platform":    ctx.Platform,
 		"fingerprint": fingerprint,
 		"agent_data": map[string]any{
 			"source":  "schmutz-agent",
-			"version": "0.1.0",
+			"version": agent.AgentVersion,
 		},
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal enroll payload: %w", err)
+		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	fmt.Printf("  → enrolling at %s\n", enrollURL)
+	retries := s.MaxRetries
+	if retries < 1 {
+		retries = 1
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= retries; attempt++ {
+		if attempt > 1 {
+			wait := time.Duration(attempt*2) * time.Second
+			slog.Warn("retrying enrollment", "attempt", attempt, "wait", wait)
+			time.Sleep(wait)
+		}
+
+		lastErr = s.doEnroll(ctx, enrollURL, body)
+		if lastErr == nil {
+			return nil
+		}
+
+		slog.Error("enrollment attempt failed", "attempt", attempt, "error", lastErr)
+	}
+
+	return fmt.Errorf("enrollment failed after %d attempts: %w", retries, lastErr)
+}
+
+func (s *Step) doEnroll(ctx *pipeline.Context, enrollURL string, body []byte) error {
+	slog.Info("enrolling", "url", enrollURL)
 
 	req, err := http.NewRequest("POST", enrollURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "schmutz-agent/0.1")
+	req.Header.Set("User-Agent", agent.UserAgent)
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("enroll request failed: %w", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	var result EnrollResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode enroll response (HTTP %d): %w", resp.StatusCode, err)
+		return fmt.Errorf("decode response (HTTP %d): %w", resp.StatusCode, err)
 	}
 
 	switch {
 	case resp.StatusCode == http.StatusOK && result.Status == "approved":
 		if result.JWT == "" {
-			return fmt.Errorf("enrollment approved but no JWT returned")
+			return fmt.Errorf("approved but no JWT returned")
 		}
 		ctx.JWT = result.JWT
 		ctx.Tier = result.Tier
 		ctx.Registered = true
-		fmt.Printf("  ✓ enrolled (identity: %s, tier: %s)\n", result.IdentityID, result.Tier)
+		slog.Info("enrolled", "identity", result.IdentityID, "tier", result.Tier)
 		return nil
 
 	case resp.StatusCode == http.StatusPreconditionRequired || result.Status == "agent_required":
-		return fmt.Errorf("enrollment requires agent install: %s", result.Message)
+		return fmt.Errorf("agent install required: %s", result.Message)
 
 	default:
 		msg := result.Message
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return fmt.Errorf("enrollment denied: %s", msg)
+		return fmt.Errorf("denied: %s", msg)
 	}
 }
 
 // enrollURL returns the full URL for the /enroll endpoint.
-// If ApiBase is set it is used as-is with "/enroll" appended; otherwise the
-// domain from ctx is used.
 func (s *Step) enrollURL(ctx *pipeline.Context) string {
 	if s.ApiBase != "" {
 		return s.ApiBase + "/enroll"
@@ -124,8 +146,7 @@ func (s *Step) enrollURL(ctx *pipeline.Context) string {
 	return fmt.Sprintf("https://%s/enroll", ctx.Domain)
 }
 
-// machineFingerprint returns a hex SHA256 of /etc/machine-id, or an empty
-// string when the file is unavailable.
+// machineFingerprint returns a hex SHA256 of /etc/machine-id.
 func machineFingerprint() string {
 	data, err := os.ReadFile("/etc/machine-id")
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -56,7 +57,7 @@ func (s *Step) Run() error {
 
 	// 3. No API key — skip threat check
 	if s.apiKey == "" {
-		fmt.Println("warning: no AbuseIPDB key configured, skipping threat score check")
+		slog.Warn("no AbuseIPDB key configured, skipping threat score check")
 		return nil
 	}
 
@@ -73,7 +74,7 @@ func (s *Step) Run() error {
 
 	// 6. Warn if score is elevated but below threshold
 	if score > 20 {
-		fmt.Printf("warning: public IP %s has elevated AbuseIPDB score %d — proceeding with caution\n", ip, score)
+		slog.Warn("elevated AbuseIPDB score", "ip", ip, "score", score)
 	}
 
 	return nil

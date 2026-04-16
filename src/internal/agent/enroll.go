@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +21,6 @@ func EnrollJWT(jwt string) error {
 		return fmt.Errorf("create identity dir: %w", err)
 	}
 
-	// Save JWT to temp file
 	jwtPath := filepath.Join(IdentityDir(), "enrollment.jwt")
 	if err := os.WriteFile(jwtPath, []byte(jwt), 0600); err != nil {
 		return fmt.Errorf("write JWT: %w", err)
@@ -29,14 +29,12 @@ func EnrollJWT(jwt string) error {
 
 	identityPath := IdentityPath()
 
-	// Find ziti binary
 	zitiBin, err := findZitiBinary()
 	if err != nil {
 		return fmt.Errorf("ziti binary not found: %w", err)
 	}
 
-	// Run enrollment
-	fmt.Printf("  → enrolling with %s\n", zitiBin)
+	slog.Info("enrolling Ziti identity", "binary", zitiBin, "output", identityPath)
 	cmd := exec.Command(zitiBin, "edge", "enroll", jwtPath, "-o", identityPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -44,19 +42,17 @@ func EnrollJWT(jwt string) error {
 		return fmt.Errorf("ziti enroll failed: %w", err)
 	}
 
-	// Verify identity was created
 	info, err := os.Stat(identityPath)
 	if err != nil {
 		return fmt.Errorf("identity file not created: %w", err)
 	}
-	fmt.Printf("  ✓ identity saved (%d bytes)\n", info.Size())
+	slog.Info("identity saved", "path", identityPath, "bytes", info.Size())
 
 	return nil
 }
 
 // findZitiBinary locates the ziti binary on the system.
 func findZitiBinary() (string, error) {
-	// Check common locations
 	paths := []string{
 		"/usr/local/bin/ziti",
 		"/usr/bin/ziti",
@@ -68,7 +64,6 @@ func findZitiBinary() (string, error) {
 		}
 	}
 
-	// Check PATH
 	p, err := exec.LookPath("ziti")
 	if err == nil {
 		return p, nil
