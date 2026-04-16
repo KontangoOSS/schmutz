@@ -4,6 +4,7 @@ package register
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -67,7 +68,19 @@ func (s *Step) Run(ctx *pipeline.Context) error {
 
 	fmt.Printf("  → enrolling at %s\n", enrollURL)
 
-	resp, err := http.Post(enrollURL, "application/json", bytes.NewReader(body)) //nolint:noctx
+	req, err := http.NewRequest("POST", enrollURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "schmutz-agent/0.1.0")
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("enroll request failed: %w", err)
 	}

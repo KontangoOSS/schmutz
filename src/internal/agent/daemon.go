@@ -1,12 +1,17 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/openziti/edge-api/rest_model"
+	"github.com/openziti/sdk-golang/ziti"
 )
 
 // Config holds the configuration for the agent daemon.
@@ -29,14 +34,15 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Daemon manages the agent lifecycle. It coordinates service goroutines and
-// owns the Ziti SDK context (added in Tasks 5-8). Call Run() to start and
-// Stop() to shut down cleanly.
+// Daemon manages the agent lifecycle. Connects to the Ziti overlay,
+// streams telemetry, and hosts API + SSH services.
 type Daemon struct {
 	cfg      *Config
-	services map[string]bool // tracks active services by name
+	zitiCtx  ziti.Context
+	services map[string]bool
 	stop     chan struct{}
 	stopped  chan struct{}
+	cancel   context.CancelFunc
 	running  bool
 	mu       sync.Mutex
 }
@@ -62,10 +68,9 @@ func NewDaemon(cfg *Config) (*Daemon, error) {
 	}, nil
 }
 
-// Run starts the daemon and blocks until Stop() is called or a fatal error
-// occurs. Ziti SDK integration (dialing telemetry, listening for API/SSH) will
-// be wired in here during Tasks 5-8. For now Run simply signals that it is
-// alive and waits for a stop signal.
+// Run starts the daemon and blocks until Stop() is called or a fatal error occurs.
+// Connects to the Ziti overlay, starts telemetry streaming, binds API + SSH services,
+// and listens for service change events (tier promotion/demotion).
 func (d *Daemon) Run() error {
 	d.mu.Lock()
 	if d.running {
@@ -75,18 +80,141 @@ func (d *Daemon) Run() error {
 	d.running = true
 	d.mu.Unlock()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	d.cancel = cancel
+
 	defer func() {
+		cancel()
 		d.mu.Lock()
 		d.running = false
 		d.mu.Unlock()
 		close(d.stopped)
 	}()
 
-	slog.Info("daemon running", "identity", d.cfg.IdentityPath, "telemetry", d.cfg.TelemetryTarget)
+	// Load Ziti identity and create SDK context
+	slog.Info("loading Ziti identity", "path", d.cfg.IdentityPath)
+	zitiCfg, err := ziti.NewConfigFromFile(d.cfg.IdentityPath)
+	if err != nil {
+		return fmt.Errorf("load identity: %w", err)
+	}
 
+	d.zitiCtx, err = ziti.NewContext(zitiCfg)
+	if err != nil {
+		return fmt.Errorf("create Ziti context: %w", err)
+	}
+
+	slog.Info("connected to Ziti overlay")
+
+	// Register service change listeners
+	d.zitiCtx.Events().AddServiceAddedListener(func(_ ziti.Context, svc *rest_model.ServiceDetail) {
+		d.HandleServiceChange(ServiceEvent{Name: *svc.Name, Added: true})
+	})
+	d.zitiCtx.Events().AddServiceRemovedListener(func(_ ziti.Context, svc *rest_model.ServiceDetail) {
+		d.HandleServiceChange(ServiceEvent{Name: *svc.Name, Added: false})
+	})
+
+	// Start telemetry stream in background
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			slog.Info("dialing telemetry service", "service", d.cfg.TelemetryTarget)
+			conn, err := d.zitiCtx.Dial(d.cfg.TelemetryTarget)
+			if err != nil {
+				slog.Error("telemetry dial failed, retrying in 30s", "error", err)
+				select {
+				case <-time.After(30 * time.Second):
+					continue
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			slog.Info("telemetry stream connected")
+			d.addService(d.cfg.TelemetryTarget)
+			err = StreamTelemetry(ctx, conn, d.cfg.CollectInterval)
+			d.removeService(d.cfg.TelemetryTarget)
+			if err != nil {
+				slog.Error("telemetry stream error, reconnecting in 10s", "error", err)
+			}
+			conn.Close()
+
+			select {
+			case <-time.After(10 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Start API service if we can listen
+	go func() {
+		hostname, _ := os.Hostname()
+		apiService := fmt.Sprintf("%s-api.tango", hostname)
+		slog.Info("listening for API service", "service", apiService)
+		ln, err := d.zitiCtx.Listen(apiService)
+		if err != nil {
+			slog.Error("API listen failed", "error", err, "service", apiService)
+			return
+		}
+		d.addService(apiService)
+		slog.Info("API service bound", "service", apiService)
+		ServeAPI(ln)
+	}()
+
+	// Start SSH proxy if we can listen
+	go func() {
+		hostname, _ := os.Hostname()
+		sshService := fmt.Sprintf("%s-ssh.tango", hostname)
+		slog.Info("listening for SSH service", "service", sshService)
+		ln, err := d.zitiCtx.Listen(sshService)
+		if err != nil {
+			slog.Error("SSH listen failed", "error", err, "service", sshService)
+			return
+		}
+		d.addService(sshService)
+		slog.Info("SSH service bound", "service", sshService)
+		ServeSSHProxy(ln, d.cfg.SSHPort)
+	}()
+
+	slog.Info("daemon running", "identity", d.cfg.IdentityPath)
+
+	// Block until stop signal
 	<-d.stop
 	slog.Info("daemon stopping")
 	return nil
+}
+
+func (d *Daemon) addService(name string) {
+	d.mu.Lock()
+	d.services[name] = true
+	d.mu.Unlock()
+}
+
+func (d *Daemon) removeService(name string) {
+	d.mu.Lock()
+	delete(d.services, name)
+	d.mu.Unlock()
+}
+
+// DialService dials a Ziti service by name. Returns a net.Conn through the overlay.
+func (d *Daemon) DialService(service string) (net.Conn, error) {
+	if d.zitiCtx == nil {
+		return nil, fmt.Errorf("not connected to Ziti overlay")
+	}
+	return d.zitiCtx.Dial(service)
+}
+
+// ListenService binds a Ziti service. Returns a net.Listener on the overlay.
+func (d *Daemon) ListenService(service string) (net.Listener, error) {
+	if d.zitiCtx == nil {
+		return nil, fmt.Errorf("not connected to Ziti overlay")
+	}
+	return d.zitiCtx.Listen(service)
 }
 
 // Stop signals Run() to return and waits for the daemon to finish cleanup.

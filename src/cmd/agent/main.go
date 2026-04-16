@@ -84,11 +84,15 @@ func enrollCmd() *cobra.Command {
 			}
 
 			if ctx.JWT != "" {
-				if err := agent.SaveIdentityJSON([]byte(ctx.JWT)); err != nil {
-					return fmt.Errorf("failed to save identity: %w", err)
+				pterm.Info.Println("Enrolling Ziti identity from JWT...")
+				if err := agent.EnrollJWT(ctx.JWT); err != nil {
+					// Save raw JWT as fallback so user can retry
+					agent.SaveIdentityJSON([]byte(ctx.JWT))
+					return fmt.Errorf("Ziti enrollment failed: %w\nRaw JWT saved — retry with: ziti edge enroll %s/enrollment.jwt",
+						err, agent.IdentityDir())
 				}
 				pterm.Success.Printf("enrolled successfully (tier: %s)\n", ctx.Tier)
-				pterm.Info.Printf("identity saved to %s\n", agent.IdentityPath())
+				pterm.Info.Printf("identity: %s\n", agent.IdentityPath())
 			}
 
 			return nil
