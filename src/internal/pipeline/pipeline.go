@@ -28,6 +28,8 @@ type Context struct {
 	DepsOK      bool
 	Identity    string
 	Registered  bool
+	JWT         string // enrollment JWT returned by the /enroll endpoint
+	Tier        string // device tier returned by the /enroll endpoint (e.g. "sandbox")
 }
 
 // NewContext returns a Context with sensible defaults.

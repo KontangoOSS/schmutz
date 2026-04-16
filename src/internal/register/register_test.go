@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KontangoOSS/schmutz/internal/pipeline"
@@ -47,45 +48,112 @@ func TestDoesNotSkipWhenFresh(t *testing.T) {
 	}
 }
 
-// TestRegisterAgainstMockAPI verifies the full registration flow against a
-// local TLS test server.
-func TestRegisterAgainstMockAPI(t *testing.T) {
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/edge/management/v1/version":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{"version": "v2.0.0-pre5"},
-			})
-		case "/edge/management/v1/identities":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{
-					"id": "test-id",
-					"enrollment": map[string]any{
-						"ott": map[string]any{"jwt": "test"},
-					},
-				},
-			})
-		default:
+// TestRegisterApproved verifies that an approved response sets ctx.Registered and ctx.JWT.
+func TestRegisterApproved(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/enroll" {
 			http.NotFound(w, r)
+			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(register.EnrollResponse{
+			Status:     "approved",
+			IdentityID: "test-identity-id",
+			JWT:        "test-jwt-token",
+			Tier:       "sandbox",
+			Message:    "welcome",
+		})
 	}))
 	defer srv.Close()
 
 	s := register.New()
-	s.ApiBase = srv.URL + "/edge/management/v1"
-	s.Insecure = true
+	s.ApiBase = srv.URL
 
 	ctx := pipeline.NewContext()
 	ctx.Hostname = "testhost"
+	ctx.OS = "linux"
+	ctx.Arch = "amd64"
+	ctx.Platform = "linux/amd64"
 
 	if err := s.Run(ctx); err != nil {
 		t.Fatalf("Run returned unexpected error: %v", err)
 	}
 	if !ctx.Registered {
-		t.Error("expected ctx.Registered to be true after successful Run")
+		t.Error("expected ctx.Registered to be true after approved enrollment")
+	}
+	if ctx.JWT != "test-jwt-token" {
+		t.Errorf("expected ctx.JWT = %q, got %q", "test-jwt-token", ctx.JWT)
+	}
+	if ctx.Tier != "sandbox" {
+		t.Errorf("expected ctx.Tier = %q, got %q", "sandbox", ctx.Tier)
+	}
+}
+
+// TestRegisterAgentRequired verifies that a 428 response returns an appropriate error.
+func TestRegisterAgentRequired(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/enroll" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPreconditionRequired)
+		json.NewEncoder(w).Encode(register.EnrollResponse{
+			Status:  "agent_required",
+			Message: "install the schmutz agent first",
+		})
+	}))
+	defer srv.Close()
+
+	s := register.New()
+	s.ApiBase = srv.URL
+
+	ctx := pipeline.NewContext()
+	ctx.Hostname = "testhost"
+
+	err := s.Run(ctx)
+	if err == nil {
+		t.Fatal("expected an error for agent_required, got nil")
+	}
+	if !strings.Contains(err.Error(), "agent install") {
+		t.Errorf("expected error to mention agent install, got: %v", err)
+	}
+	if ctx.Registered {
+		t.Error("ctx.Registered should remain false on agent_required")
+	}
+}
+
+// TestRegisterDenied verifies that a denied response returns an appropriate error.
+func TestRegisterDenied(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/enroll" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(register.EnrollResponse{
+			Status:  "denied",
+			Message: "this device is not authorized",
+		})
+	}))
+	defer srv.Close()
+
+	s := register.New()
+	s.ApiBase = srv.URL
+
+	ctx := pipeline.NewContext()
+	ctx.Hostname = "testhost"
+
+	err := s.Run(ctx)
+	if err == nil {
+		t.Fatal("expected an error for denied enrollment, got nil")
+	}
+	if !strings.Contains(err.Error(), "denied") {
+		t.Errorf("expected error to mention denied, got: %v", err)
+	}
+	if ctx.Registered {
+		t.Error("ctx.Registered should remain false on denied enrollment")
 	}
 }

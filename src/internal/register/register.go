@@ -1,23 +1,32 @@
-// Package register implements the ephemeral Ziti identity registration step.
+// Package register implements the device enrollment step via the /enroll endpoint.
 package register
 
 import (
-	"crypto/tls"
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"strings"
+	"net/http"
+	"os"
 
 	"github.com/KontangoOSS/schmutz/internal/pipeline"
-	"github.com/go-resty/resty/v2"
-	"github.com/google/uuid"
 )
 
 // Step implements the register bootstrap step.
 type Step struct {
-	ApiBase  string // override base URL for testing
-	Insecure bool   // skip TLS verify
+	ApiBase string // override base URL for testing (e.g. mock server URL)
 }
 
-// New returns an empty Step. ApiBase will be derived from ctx.Domain in Run.
+// EnrollResponse represents the JSON body returned by POST /enroll.
+type EnrollResponse struct {
+	Status     string `json:"status"`
+	IdentityID string `json:"identity_id,omitempty"`
+	JWT        string `json:"jwt,omitempty"`
+	Tier       string `json:"tier,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
+// New returns a Step ready for use.
 func New() *Step {
 	return &Step{}
 }
@@ -32,57 +41,83 @@ func (s *Step) Skip(ctx *pipeline.Context) bool {
 	return ctx.Registered || ctx.Identity != ""
 }
 
-// Run registers an ephemeral Ziti identity with the controller.
+// Run enrolls the device by POSTing machine info to the /enroll endpoint.
+// No admin credentials are used — the controller handles authorization server-side.
 func (s *Step) Run(ctx *pipeline.Context) error {
-	base := s.ApiBase
-	if base == "" {
-		base = fmt.Sprintf("https://%s/edge/management/v1", ctx.Domain)
+	enrollURL := s.enrollURL(ctx)
+
+	fingerprint := machineFingerprint()
+
+	payload := map[string]any{
+		"hostname":   ctx.Hostname,
+		"os":         ctx.OS,
+		"arch":       ctx.Arch,
+		"platform":   ctx.Platform,
+		"fingerprint": fingerprint,
+		"agent_data": map[string]any{
+			"source":  "schmutz-agent",
+			"version": "0.1.0",
+		},
 	}
 
-	client := resty.New().
-		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: s.Insecure}).
-		SetRetryCount(3)
-
-	// 1. Verify controller is reachable.
-	versionResp, err := client.R().Get(base + "/version")
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("controller unreachable: %w", err)
-	}
-	if versionResp.StatusCode() != 200 {
-		return fmt.Errorf("controller /version returned HTTP %d", versionResp.StatusCode())
+		return fmt.Errorf("failed to marshal enroll payload: %w", err)
 	}
 
-	// 2. POST a new ephemeral identity.
-	name := BuildIdentityName(ctx.Hostname)
-	body := map[string]any{
-		"name":           name,
-		"type":           "Default",
-		"isAdmin":        false,
-		"roleAttributes": []string{"ephemeral", "base"},
-		"enrollment":     map[string]any{"ott": true},
-	}
+	fmt.Printf("  → enrolling at %s\n", enrollURL)
 
-	resp, err := client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(base + "/identities")
+	resp, err := http.Post(enrollURL, "application/json", bytes.NewReader(body)) //nolint:noctx
 	if err != nil {
-		return fmt.Errorf("identity POST failed: %w", err)
+		return fmt.Errorf("enroll request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result EnrollResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode enroll response (HTTP %d): %w", resp.StatusCode, err)
 	}
 
-	code := resp.StatusCode()
-	if code != 200 && code != 201 {
-		return fmt.Errorf("identity POST returned HTTP %d: %s", code, strings.TrimSpace(resp.String()))
-	}
+	switch {
+	case resp.StatusCode == http.StatusOK && result.Status == "approved":
+		if result.JWT == "" {
+			return fmt.Errorf("enrollment approved but no JWT returned")
+		}
+		ctx.JWT = result.JWT
+		ctx.Tier = result.Tier
+		ctx.Registered = true
+		fmt.Printf("  ✓ enrolled (identity: %s, tier: %s)\n", result.IdentityID, result.Tier)
+		return nil
 
-	ctx.Registered = true
-	return nil
+	case resp.StatusCode == http.StatusPreconditionRequired || result.Status == "agent_required":
+		return fmt.Errorf("enrollment requires agent install: %s", result.Message)
+
+	default:
+		msg := result.Message
+		if msg == "" {
+			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
+		return fmt.Errorf("enrollment denied: %s", msg)
+	}
 }
 
-// BuildIdentityName returns an ephemeral identity name using the first 8
-// characters of a new UUID: "eph-<hostname>-<uuid8>".
-func BuildIdentityName(hostname string) string {
-	id := uuid.New().String()
-	short := strings.ReplaceAll(id, "-", "")[:8]
-	return fmt.Sprintf("eph-%s-%s", hostname, short)
+// enrollURL returns the full URL for the /enroll endpoint.
+// If ApiBase is set it is used as-is with "/enroll" appended; otherwise the
+// domain from ctx is used.
+func (s *Step) enrollURL(ctx *pipeline.Context) string {
+	if s.ApiBase != "" {
+		return s.ApiBase + "/enroll"
+	}
+	return fmt.Sprintf("https://%s/enroll", ctx.Domain)
+}
+
+// machineFingerprint returns a hex SHA256 of /etc/machine-id, or an empty
+// string when the file is unavailable.
+func machineFingerprint() string {
+	data, err := os.ReadFile("/etc/machine-id")
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(bytes.TrimSpace(data))
+	return fmt.Sprintf("%x", sum)
 }
