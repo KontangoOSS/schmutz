@@ -39,6 +39,16 @@ lint:
 clean:
 	rm -rf $(BUILD)/*
 
+## Build the agent binary
+build-agent:
+	cd $(SRC) && go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-agent ./cmd/agent
+
+## Cross-compile agent for Linux amd64 and arm64
+release-agent:
+	@mkdir -p $(BUILD)
+	cd $(SRC) && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-agent-linux-amd64 ./cmd/agent
+	cd $(SRC) && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-agent-linux-arm64 ./cmd/agent
+
 ## Build bootstrap binary
 build-bootstrap:
 	cd $(SRC) && go build -ldflags="-s -w -X main.version=$(VERSION)" -o ../$(BUILD)/schmutz-bootstrap ./cmd/bootstrap

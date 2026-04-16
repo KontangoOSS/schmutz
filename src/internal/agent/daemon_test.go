@@ -111,3 +111,50 @@ func TestDaemonStartStop(t *testing.T) {
 		t.Error("expected daemon to be stopped after Stop()")
 	}
 }
+
+// TestHandleServiceChangeAddsAPI verifies that an Added event for an -api
+// service is reflected in ActiveServices.
+func TestHandleServiceChangeAddsAPI(t *testing.T) {
+	dir := t.TempDir()
+	idPath := filepath.Join(dir, "identity.json")
+	if err := os.WriteFile(idPath, []byte(`{}`), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	cfg := DefaultConfig()
+	cfg.IdentityPath = idPath
+	d, err := NewDaemon(cfg)
+	if err != nil {
+		t.Fatalf("NewDaemon: %v", err)
+	}
+
+	d.HandleServiceChange(ServiceEvent{Name: "telemetry-api.tango", Added: true})
+
+	svcs := d.ActiveServices()
+	if len(svcs) != 1 || svcs[0] != "telemetry-api.tango" {
+		t.Errorf("expected [telemetry-api.tango], got %v", svcs)
+	}
+}
+
+// TestHandleServiceChangeRemoves verifies that a removal event deletes the
+// service from ActiveServices.
+func TestHandleServiceChangeRemoves(t *testing.T) {
+	dir := t.TempDir()
+	idPath := filepath.Join(dir, "identity.json")
+	if err := os.WriteFile(idPath, []byte(`{}`), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	cfg := DefaultConfig()
+	cfg.IdentityPath = idPath
+	d, err := NewDaemon(cfg)
+	if err != nil {
+		t.Fatalf("NewDaemon: %v", err)
+	}
+
+	d.HandleServiceChange(ServiceEvent{Name: "mgmt-ssh.tango", Added: true})
+	d.HandleServiceChange(ServiceEvent{Name: "mgmt-ssh.tango", Added: false})
+
+	svcs := d.ActiveServices()
+	if len(svcs) != 0 {
+		t.Errorf("expected empty ActiveServices after removal, got %v", svcs)
+	}
+}
