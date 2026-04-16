@@ -73,7 +73,7 @@ func (s *Step) Run(ctx *pipeline.Context) error {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "schmutz-agent/0.1.0")
+	req.Header.Set("User-Agent", "schmutz-agent/0.1")
 
 	client := &http.Client{
 		Transport: &http.Transport{
