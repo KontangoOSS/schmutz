@@ -426,6 +426,7 @@ func handleCmd(cmd *HeartbeatCmd, intervalCh chan<- time.Duration) {
 		}
 		var p struct {
 			URL      string `json:"url"`
+			Slug     string `json:"slug"`
 			Token    string `json:"token"`
 			RoleID   string `json:"role_id"`
 			SecretID string `json:"secret_id"`
@@ -433,13 +434,18 @@ func handleCmd(cmd *HeartbeatCmd, intervalCh chan<- time.Duration) {
 		if err := json.Unmarshal(cmd.Payload, &p); err != nil || p.URL == "" {
 			return
 		}
-		go JoinFunc(p.URL, p.Token, p.RoleID, p.SecretID)
+		// Use hostname as slug if not provided by controller command
+		slug := p.Slug
+		if slug == "" {
+			slug, _ = os.Hostname()
+		}
+		go JoinFunc(p.URL, slug, p.Token, p.RoleID, p.SecretID)
 	}
 }
 
 // JoinFunc is called when the agent receives an enroll command. Injected at
 // startup so the agent package doesn't import the join command package.
-var JoinFunc func(url, session, roleID, secretID string) error
+var JoinFunc func(url, slug, session, roleID, secretID string) error
 
 // HeartbeatCmd is the command returned by the controller in a heartbeat response.
 type HeartbeatCmd struct {

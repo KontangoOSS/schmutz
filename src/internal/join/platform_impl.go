@@ -35,7 +35,30 @@ func (p *LinuxPlatform) Preflight() []string {
 	return missing
 }
 
-func (p *LinuxPlatform) TangoDir() string { return "/opt/tango" }
+func (p *LinuxPlatform) TangoDir() string   { return "/opt/tango" }
+
+func (p *LinuxPlatform) IsDirty() bool {
+	if _, err := os.Stat(p.IdentityPath()); err == nil {
+		return true
+	}
+	if _, err := os.Stat(p.ZitiBinaryPath()); err == nil {
+		return true
+	}
+	out, _ := exec.Command("systemctl", "is-enabled", "tango-tunnel.service").Output()
+	if strings.TrimSpace(string(out)) != "not-found" && len(out) > 0 {
+		return true
+	}
+	return false
+}
+
+func (p *LinuxPlatform) Cleanup() error {
+	exec.Command("systemctl", "stop", "tango-tunnel.service").Run()
+	exec.Command("systemctl", "disable", "tango-tunnel.service").Run()
+	os.Remove("/etc/systemd/system/tango-tunnel.service")
+	exec.Command("systemctl", "daemon-reload").Run()
+	os.RemoveAll(p.TangoDir())
+	return nil
+}
 func (p *LinuxPlatform) ZitiBinaryPath() string {
 	return filepath.Join(p.TangoDir(), "bin", "ziti")
 }
@@ -140,7 +163,27 @@ func (p *DarwinPlatform) Preflight() []string {
 	return missing
 }
 
-func (p *DarwinPlatform) TangoDir() string       { return "/usr/local/tango" }
+func (p *DarwinPlatform) TangoDir() string { return "/usr/local/tango" }
+
+func (p *DarwinPlatform) IsDirty() bool {
+	if _, err := os.Stat(p.IdentityPath()); err == nil {
+		return true
+	}
+	if _, err := os.Stat(p.ZitiBinaryPath()); err == nil {
+		return true
+	}
+	if err := exec.Command("launchctl", "list", "io.schmutz.tango-tunnel").Run(); err == nil {
+		return true
+	}
+	return false
+}
+
+func (p *DarwinPlatform) Cleanup() error {
+	exec.Command("launchctl", "unload", darwinPlistPath).Run()
+	os.Remove(darwinPlistPath)
+	os.RemoveAll(p.TangoDir())
+	return nil
+}
 func (p *DarwinPlatform) ZitiBinaryPath() string { return filepath.Join(p.TangoDir(), "bin", "ziti") }
 func (p *DarwinPlatform) IdentityPath() string   { return filepath.Join(p.TangoDir(), "identity.json") }
 func (p *DarwinPlatform) EnsureDir() error {
@@ -231,6 +274,24 @@ func (p *WindowsPlatform) Preflight() []string {
 		missing = append(missing, "network access (cannot reach internet)")
 	}
 	return missing
+}
+
+func (p *WindowsPlatform) IsDirty() bool {
+	if _, err := os.Stat(p.IdentityPath()); err == nil {
+		return true
+	}
+	if _, err := os.Stat(p.ZitiBinaryPath()); err == nil {
+		return true
+	}
+	out, _ := exec.Command("sc.exe", "query", "TangoTunnel").Output()
+	return len(out) > 0 && !bytes.Contains(out, []byte("1060")) // 1060 = service not found
+}
+
+func (p *WindowsPlatform) Cleanup() error {
+	exec.Command("sc.exe", "stop", "TangoTunnel").Run()
+	exec.Command("sc.exe", "delete", "TangoTunnel").Run()
+	os.RemoveAll(p.TangoDir())
+	return nil
 }
 
 func (p *WindowsPlatform) TangoDir() string {

@@ -13,15 +13,19 @@ import (
 
 // EnrollResult is the outcome of an SSE enrollment.
 type EnrollResult struct {
-	Status   string          `json:"status"`
-	ID       string          `json:"id"`
-	Nickname string          `json:"nickname"`
-	Identity json.RawMessage `json:"identity"`
-	Config   struct {
+	Status       string          `json:"status"`
+	ID           string          `json:"id"`
+	AppID        string          `json:"app_id,omitempty"`
+	Nickname     string          `json:"nickname"`
+	Identity     json.RawMessage `json:"identity"`
+	Config       struct {
 		Hosts  []string               `json:"hosts"`
 		Tunnel map[string]interface{} `json:"tunnel"`
 	} `json:"config"`
-	Reason string `json:"reason,omitempty"`
+	Reason       string   `json:"reason,omitempty"`
+	Services     []string `json:"services,omitempty"`
+	SSHPublicKey string   `json:"ssh_public_key,omitempty"`
+	ClaimURL     string   `json:"claim_url,omitempty"`
 }
 
 // SSEEvent is a single event from the enrollment stream.
@@ -121,22 +125,30 @@ func SSEEnrollStream(url, method, session, roleID, secretID string, eventFn func
 		case "identity":
 			result = &EnrollResult{}
 			var id struct {
-				ID       string          `json:"id"`
-				Nickname string          `json:"nickname"`
-				Status   string          `json:"status"`
-				Identity json.RawMessage `json:"identity"`
-				Config   struct {
+				ID           string          `json:"id"`
+				AppID        string          `json:"app_id"`
+				Nickname     string          `json:"nickname"`
+				Status       string          `json:"status"`
+				Identity     json.RawMessage `json:"identity"`
+				Config       struct {
 					Hosts  []string               `json:"hosts"`
 					Tunnel map[string]interface{} `json:"tunnel"`
 				} `json:"config"`
+				Services     []string `json:"services"`
+				SSHPublicKey string   `json:"ssh_public_key"`
+				ClaimURL     string   `json:"claim_url"`
 			}
 			json.Unmarshal([]byte(data), &id)
 			result.ID = id.ID
+			result.AppID = id.AppID
 			result.Nickname = id.Nickname
 			result.Status = id.Status
 			result.Identity = id.Identity
 			result.Config.Hosts = id.Config.Hosts
 			result.Config.Tunnel = id.Config.Tunnel
+			result.Services = id.Services
+			result.SSHPublicKey = id.SSHPublicKey
+			result.ClaimURL = id.ClaimURL
 			if eventFn != nil {
 				eventFn(SSEEvent{Kind: "identity", Status: id.Status, Result: result})
 			}
@@ -159,7 +171,7 @@ func SSEEnrollStream(url, method, session, roleID, secretID string, eventFn func
 
 // SSEEnroll sends all probe data in one POST and reads SSE events back.
 // This is the v2 enrollment path — one request, streaming response.
-func SSEEnroll(url, method, session, roleID, secretID string) (*EnrollResult, error) {
+func SSEEnroll(url, method, slug, session, roleID, secretID string) (*EnrollResult, error) {
 	// Collect all probe data upfront
 	os := ProbeOS()
 	hw := ProbeHardware()
@@ -169,6 +181,7 @@ func SSEEnroll(url, method, session, roleID, secretID string) (*EnrollResult, er
 	// Build the combined payload
 	payload := map[string]interface{}{
 		"method":  method,
+		"slug":    slug,
 		"session": session,
 	}
 	if roleID != "" {
@@ -275,22 +288,30 @@ func SSEEnroll(url, method, session, roleID, secretID string) (*EnrollResult, er
 			case "identity":
 				result = &EnrollResult{}
 				var id struct {
-					ID       string          `json:"id"`
-					Nickname string          `json:"nickname"`
-					Status   string          `json:"status"`
-					Identity json.RawMessage `json:"identity"`
-					Config   struct {
+					ID           string          `json:"id"`
+					AppID        string          `json:"app_id"`
+					Nickname     string          `json:"nickname"`
+					Status       string          `json:"status"`
+					Identity     json.RawMessage `json:"identity"`
+					Config       struct {
 						Hosts  []string               `json:"hosts"`
 						Tunnel map[string]interface{} `json:"tunnel"`
 					} `json:"config"`
+					Services     []string `json:"services"`
+					SSHPublicKey string   `json:"ssh_public_key"`
+					ClaimURL     string   `json:"claim_url"`
 				}
 				json.Unmarshal([]byte(data), &id)
 				result.ID = id.ID
+				result.AppID = id.AppID
 				result.Nickname = id.Nickname
 				result.Status = id.Status
 				result.Identity = id.Identity
 				result.Config.Hosts = id.Config.Hosts
 				result.Config.Tunnel = id.Config.Tunnel
+				result.Services = id.Services
+				result.SSHPublicKey = id.SSHPublicKey
+				result.ClaimURL = id.ClaimURL
 
 			case "error":
 				var e struct {

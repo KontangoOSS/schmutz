@@ -16,6 +16,12 @@ type Platform interface {
 	// Preflight checks all dependencies are met before proceeding.
 	// Returns a list of missing dependencies (empty = all good).
 	Preflight() []string
+	// IsDirty returns true if a previous (possibly broken) install is detected.
+	// Checks for existing identity, tango-tunnel service, or ziti binary.
+	IsDirty() bool
+	// Cleanup removes all schmutz/tango state from a previous install so the
+	// current run starts clean. Stops services, removes identity and binaries.
+	Cleanup() error
 	InstallZiti(version string) error
 	InstallService(identityFile string) error
 	StartService() error

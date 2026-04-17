@@ -47,7 +47,9 @@ func main() {
 		if roleID != "" {
 			method = "approle"
 		}
-		sseResult, err := join.SSEEnroll(url, method, session, roleID, secretID)
+		// slug: use hostname as device name for the standalone join binary
+		slug, _ := os.Hostname()
+		sseResult, err := join.SSEEnroll(url, method, slug, session, roleID, secretID)
 		if err != nil {
 			log.Fatalf("enrollment failed: %v", err)
 		}
