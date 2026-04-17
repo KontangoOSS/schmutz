@@ -15,12 +15,16 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "signup":
+		cmdSignup(os.Args[2:])
+	case "join":
+		cmdJoin(os.Args[2:])
+	case "enroll":
+		cmdJoin(os.Args[2:]) // same flow — controller distinguishes by fingerprint
 	case "run":
 		cmdRun(os.Args[2:])
 	case "agent":
 		cmdAgent(os.Args[2:])
-	case "join":
-		cmdJoin(os.Args[2:])
 	case "bootstrap":
 		cmdBootstrap(os.Args[2:])
 	case "version":
@@ -35,18 +39,26 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`schmutz — zero-trust edge firewall + universal machine agent
+	fmt.Println(`schmutz — zero-trust overlay agent
 
-Commands:
-  run          Start the edge gateway (SNI classifier + Ziti relay)
-  agent        Start the universal machine agent (heartbeat + config listener)
-  version      Print version
+Account:
+  signup       Create a platform account (Zitadel + Bao + device namespace)
+               NOT YET IMPLEMENTED — endpoint does not exist on controller
+
+Device:
+  join         Enroll a new device into the overlay (first time, telemetry window)
+  enroll       Re-enroll a known device (skips telemetry window, issues new JWT)
+
+Services:
+  agent        Run the machine agent (heartbeat, config listener, dark services)
+  run          Run the edge gateway (SNI classifier + Ziti relay)
+  bootstrap    Re-run post-approval setup (DNS, tunnel, systemd units)
 
 Usage:
-  schmutz run --config /opt/schmutz/config.yaml
-  schmutz join https://your-controller.example [--session=TOKEN] [--role-id=ID --secret-id=ID]
-  schmutz agent [--identity /opt/tango/identity.json] [--fallback https://your-controller.example]
-  schmutz bootstrap --controller https://ctrl.konoss.org [--identity /opt/ziti/identity.json] [--ziti /usr/local/bin/ziti] [--dry-run]`)
+  schmutz signup --url https://ctrl.konoss.org --email user@example.com
+  schmutz join   https://ctrl.konoss.org --slug my-device
+  schmutz enroll https://ctrl.konoss.org --slug my-device
+  schmutz agent  [--identity /opt/tango/identity.json]`)
 }
 
 func cmdRun(args []string) {

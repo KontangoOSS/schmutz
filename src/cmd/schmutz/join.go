@@ -148,7 +148,7 @@ func installAfterEnroll(url string, result *joinResult) error {
 	}
 
 	// Install ziti binary first — enrollJWT needs it.
-	zitiVersion := "latest"
+	zitiVersion := "2.0.0-pre5"
 	if v, ok := result.Tunnel["version"].(string); ok && v != "" && v != "latest" {
 		zitiVersion = v
 	}
@@ -425,7 +425,7 @@ func enrollJWT(jwt, identityPath, zitiBin string) error {
 	jwtFile.Close()
 
 	log.Printf("  enrolling identity via ziti…")
-	cmd := exec.Command(zitiBin, "edge", "enroll", jwtFile.Name(), "-o", identityPath)
+	cmd := exec.Command(zitiBin, "edge", "enroll", "--jwt", jwtFile.Name(), "-o", identityPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
