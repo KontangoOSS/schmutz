@@ -25,6 +25,9 @@ type Platform interface {
 	InstallZiti(version string) error
 	InstallService(identityFile string) error
 	StartService() error
+	StopService() error
+	// ServiceStatus returns the current service state ("active", "running", "inactive", etc.).
+	ServiceStatus() string
 	EnsureDir() error
 	// WaitForTunnel polls the tunnel status until it reports healthy or times out.
 	// Uses the ziti v2 IPC agent (ziti agent stats).

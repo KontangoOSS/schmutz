@@ -37,6 +37,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 1b. Idempotency — detect existing install before touching anything.
+	if platform.IsDirty() {
+		status := platform.ServiceStatus()
+		if status == "active" || status == "running" {
+			log.Println("already enrolled and tunnel is running — nothing to do")
+			os.Exit(0)
+		}
+		log.Println("partial install detected, cleaning up before re-enrollment…")
+		if err := platform.Cleanup(); err != nil {
+			log.Fatalf("cleanup failed: %v", err)
+		}
+	}
+
 	// 2. Enroll via WebSocket (v2) or REST (v1 fallback)
 	var result *enrollResult
 

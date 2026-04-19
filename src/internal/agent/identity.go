@@ -39,12 +39,16 @@ func IsEnrolled() bool {
 }
 
 // SaveIdentityJSON writes raw identity JSON bytes to IdentityPath().
-// Creates the directory if needed. Sets file permissions to 0600.
+// Uses an atomic write (temp file + rename) to avoid partial writes on power loss.
 func SaveIdentityJSON(data []byte) error {
 	if err := EnsureDir(); err != nil {
 		return err
 	}
-	return os.WriteFile(IdentityPath(), data, 0600)
+	tmp := IdentityPath() + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, IdentityPath())
 }
 
 // LoadIdentityFile reads the identity JSON file and returns the path.

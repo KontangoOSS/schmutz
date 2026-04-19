@@ -44,8 +44,11 @@ func (p *LinuxPlatform) IsDirty() bool {
 	if _, err := os.Stat(p.ZitiBinaryPath()); err == nil {
 		return true
 	}
-	out, _ := exec.Command("systemctl", "is-enabled", "tango-tunnel.service").Output()
-	if strings.TrimSpace(string(out)) != "not-found" && len(out) > 0 {
+	// Check both enabled state and active state — catches partial uninstall where
+	// unit file was removed but identity remains (handled above) or vice versa.
+	out, _ := exec.Command("systemctl", "is-active", "tango-tunnel.service").Output()
+	status := strings.TrimSpace(string(out))
+	if status != "inactive" && status != "failed" && status != "" {
 		return true
 	}
 	return false

@@ -329,11 +329,11 @@ func doEnroll(baseURL string, req enrollRequest) (*joinResult, error) {
 	case result.Status == "pending":
 		waitSecs := result.RetryAfter
 		if waitSecs <= 0 {
-			waitSecs = 60
+			waitSecs = 15
 		}
 		token := result.StreamToken
 
-		// Pin to the node that opened the window so retry finds the same in-memory state
+		// Pin to the node that opened the window
 		pinnedBase := baseURL
 		if result.NodeURL != "" {
 			pinnedBase = result.NodeURL
@@ -341,14 +341,29 @@ func doEnroll(baseURL string, req enrollRequest) (*joinResult, error) {
 			log.Printf("  pinned to %s", result.NodeURL)
 		}
 
-		log.Printf("  pending — streaming telemetry for %ds…", waitSecs)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(waitSecs)*time.Second)
+		// Stream telemetry continuously while waiting for admin approval
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go streamTelemetry(ctx, streamURL, req.Fingerprint, token)
-		<-ctx.Done()
+		if token != "" {
+			go streamTelemetry(ctx, streamURL, req.Fingerprint, token)
+		}
 
-		log.Printf("  window closed — retrying…")
-		return doEnroll(pinnedBase, req)
+		log.Printf("  waiting for administrator approval…")
+		for {
+			time.Sleep(time.Duration(waitSecs) * time.Second)
+			poll, err := pollEnroll(pinnedBase, req)
+			if err != nil {
+				return nil, err
+			}
+			if poll != nil {
+				cancel()
+				return poll, nil
+			}
+			// Refresh token if the poll response includes one
+		}
+
+	case result.Status == "denied":
+		return nil, fmt.Errorf("enrollment denied by administrator")
 
 	default:
 		msg := result.Message
@@ -395,6 +410,47 @@ func streamTelemetry(ctx context.Context, streamURL, fingerprint, token string) 
 		case <-ticker.C:
 			send()
 		}
+	}
+}
+
+// pollEnroll POSTs to /enroll and returns the result if approved, error if denied, nil if still pending.
+func pollEnroll(baseURL string, req enrollRequest) (*joinResult, error) {
+	b, _ := json.Marshal(req)
+	resp, err := http.Post(baseURL+"/enroll", "application/json", bytes.NewReader(b))
+	if err != nil {
+		return nil, nil // transient — keep waiting
+	}
+	defer resp.Body.Close()
+
+	var result enrollResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, nil
+	}
+
+	switch result.Status {
+	case "approved":
+		if result.JWT == "" {
+			return nil, fmt.Errorf("approved but no JWT returned")
+		}
+		nick := result.Slug
+		if nick == "" {
+			nick = result.IdentityID
+		}
+		return &joinResult{
+			ID:           result.IdentityID,
+			Nickname:     nick,
+			JWT:          result.JWT,
+			Status:       result.Tier,
+			Services:     result.Services,
+			SSHPublicKey: result.SSHPublicKey,
+			AppID:        result.AppID,
+			ClaimURL:     result.ClaimURL,
+			Tunnel:       map[string]interface{}{},
+		}, nil
+	case "denied":
+		return nil, fmt.Errorf("enrollment denied by administrator")
+	default:
+		return nil, nil // still pending
 	}
 }
 

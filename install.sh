@@ -14,6 +14,11 @@ case "$ARCH" in
   armv7*|armhf)  ARCH="arm" ;;
 esac
 
+if [ -f "/opt/tango/identity.json" ] && systemctl is-active --quiet tango-tunnel 2>/dev/null; then
+  echo "schmutz: already enrolled and running — nothing to do"
+  exit 0
+fi
+
 BINARY="schmutz-join-${OS}-${ARCH}"
 TMP=$(mktemp -d)
 trap "rm -rf $TMP" EXIT
