@@ -66,10 +66,18 @@ func main() {
 		if err != nil {
 			log.Fatalf("enrollment failed: %v", err)
 		}
+		identityBytes := []byte(sseResult.Identity)
+		// If the server sent the identity as a JSON string (quoted), unwrap it.
+		if len(identityBytes) > 0 && identityBytes[0] == '"' {
+			var s string
+			if err := json.Unmarshal(identityBytes, &s); err == nil {
+				identityBytes = []byte(s)
+			}
+		}
 		result = &enrollResult{
 			ID:       sseResult.ID,
 			Nickname: sseResult.Nickname,
-			Identity: sseResult.Identity,
+			Identity: identityBytes,
 			Status:   sseResult.Status,
 			Hosts:    sseResult.Config.Hosts,
 			Tunnel:   sseResult.Config.Tunnel,
