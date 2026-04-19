@@ -92,6 +92,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=%s tunnel host -i %s -v
+ExecStartPost=/bin/sh -c 'sleep 3; resolvectl default-route ziti0 false 2>/dev/null || true'
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
