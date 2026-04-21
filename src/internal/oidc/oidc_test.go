@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/KontangoOSS/schmutz/internal/oidc"
 )
@@ -51,5 +50,4 @@ func TestToken_cached(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("expected 1 HTTP call (cached), got %d", calls)
 	}
-	_ = time.Second
 }

@@ -17,6 +17,7 @@ type Client struct {
 	issuer       string
 	clientID     string
 	clientSecret string
+	httpClient   *http.Client
 
 	mu        sync.Mutex
 	token     string
@@ -29,6 +30,7 @@ func New(issuer, clientID, clientSecret string) *Client {
 		issuer:       strings.TrimRight(issuer, "/"),
 		clientID:     clientID,
 		clientSecret: clientSecret,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -57,22 +59,26 @@ func (c *Client) refresh(ctx context.Context) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("oidc: POST %s: %w", tokenURL, err)
 	}
 	defer resp.Body.Close()
 
 	var result struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
-		Error       string `json:"error"`
+		AccessToken      string `json:"access_token"`
+		ExpiresIn        int    `json:"expires_in"`
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("oidc: decode response: %w", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf("oidc: token error: %s", result.Error)
+		return "", fmt.Errorf("oidc: token error: %s — %s", result.Error, result.ErrorDescription)
+	}
+	if result.ExpiresIn <= 0 {
+		return "", fmt.Errorf("oidc: server returned zero expires_in")
 	}
 
 	c.token = result.AccessToken
