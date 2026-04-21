@@ -36,7 +36,8 @@ func cmdAgent(args []string) {
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
-	agent.JoinFunc = runJoin
+	// JoinFunc not set — old enrollment flow removed; devices should use new enrollment flow
+	agent.JoinFunc = nil
 
 	cfg := agent.BootConfig{
 		IdentityPath:     *identityPath,
