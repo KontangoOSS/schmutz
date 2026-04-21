@@ -37,6 +37,9 @@ func enrollCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := r.Validate(); err != nil {
+				return err
+			}
 			identityPath, _ := r.IdentityPath()
 			if !enroll.NeedsEnrollment(identityPath) {
 				log.Println("schmutz: already enrolled")
@@ -65,6 +68,9 @@ func startCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			r, err := root.LoadRoot(schmutzDir)
 			if err != nil {
+				return err
+			}
+			if err := r.Validate(); err != nil {
 				return err
 			}
 

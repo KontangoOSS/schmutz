@@ -63,9 +63,9 @@ func Register(ctx context.Context, controllerURL, hostname, osName, arch, finger
 		if err != nil {
 			return "", "", fmt.Errorf("enroll: POST %s: %w", pollURL, err)
 		}
-		if resp.StatusCode >= 500 {
+		if resp.StatusCode >= 400 {
 			resp.Body.Close()
-			return "", "", fmt.Errorf("enroll: server error %d from %s", resp.StatusCode, pollURL)
+			return "", "", fmt.Errorf("enroll: HTTP %d from %s", resp.StatusCode, pollURL)
 		}
 		var result enrollResponse
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
