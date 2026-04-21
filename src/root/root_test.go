@@ -48,3 +48,36 @@ func TestRoot_paths(t *testing.T) {
 		t.Error("IdentityPath should not be empty")
 	}
 }
+
+func TestLoadRoot_withManifest(t *testing.T) {
+	dir := t.TempDir()
+	manifest := []byte("device_id: test-node-42\ncontroller_url: https://ctrl.example.com\n")
+	if err := os.WriteFile(filepath.Join(dir, "manifest.yaml"), manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := root.LoadRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.DeviceID() != "test-node-42" {
+		t.Errorf("DeviceID: got %q, want %q", r.DeviceID(), "test-node-42")
+	}
+	if r.ControllerURL() != "https://ctrl.example.com" {
+		t.Errorf("ControllerURL: got %q", r.ControllerURL())
+	}
+	if err := r.Validate(); err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+}
+
+func TestRoot_validateMissingDeviceID(t *testing.T) {
+	dir := t.TempDir()
+	// No manifest — zero config
+	r, err := root.LoadRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Validate() == nil {
+		t.Error("expected Validate() to error when device_id is empty")
+	}
+}

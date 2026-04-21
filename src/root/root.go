@@ -1,6 +1,7 @@
 package root
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +29,9 @@ type Root interface {
 	ZitadelIssuer() string
 	ZitadelClientID() string
 	ZitadelClientSecret() string
+
+	// Validate checks required fields; callers invoke when they actually need device_id
+	Validate() error
 }
 
 type schmutzRoot struct {
@@ -71,6 +75,13 @@ func (r *schmutzRoot) ZitadelIssuer() string      { return r.cfg.ZitadelIssuer }
 func (r *schmutzRoot) ZitadelClientID() string    { return r.cfg.ZitadelClientID }
 func (r *schmutzRoot) ZitadelClientSecret() string { return r.cfg.ZitadelClientSecret }
 
+func (r *schmutzRoot) Validate() error {
+	if r.cfg.DeviceID == "" {
+		return fmt.Errorf("root: device_id required in manifest.yaml")
+	}
+	return nil
+}
+
 // config is the minimal subset of manifest.yaml that Root needs.
 type config struct {
 	DeviceID      string `yaml:"device_id"`
@@ -85,7 +96,7 @@ type config struct {
 func loadConfig(dir string) (config, error) {
 	var cfg config
 	data, err := os.ReadFile(filepath.Join(dir, "manifest.yaml"))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		// No manifest — return zero config (not an error; used in tests and pre-enrollment)
 		return cfg, nil
 	}
@@ -94,9 +105,6 @@ func loadConfig(dir string) (config, error) {
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return cfg, fmt.Errorf("root: parse manifest: %w", err)
-	}
-	if cfg.DeviceID == "" {
-		return cfg, fmt.Errorf("root: device_id required in manifest.yaml")
 	}
 	return cfg, nil
 }
