@@ -1,6 +1,7 @@
 package enroll_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func TestRegister_approved(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jwt, slug, err := enroll.Register(srv.URL, "host", "linux", "amd64", "fp123", nil)
+	jwt, slug, err := enroll.Register(context.Background(), srv.URL, "host", "linux", "amd64", "fp123", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,8 +59,15 @@ func TestRegister_banned(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, _, err := enroll.Register(srv.URL, "host", "linux", "amd64", "fp", nil)
+	_, _, err := enroll.Register(context.Background(), srv.URL, "host", "linux", "amd64", "fp", nil)
 	if err == nil {
 		t.Fatal("expected error for banned device")
+	}
+}
+
+func TestEnrollJWT_emptyToken(t *testing.T) {
+	err := enroll.EnrollJWT("", "/tmp/should-not-exist.json")
+	if err == nil {
+		t.Fatal("expected error for empty jwt")
 	}
 }

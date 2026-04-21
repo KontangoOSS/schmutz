@@ -2,6 +2,7 @@ package enroll
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,7 +40,7 @@ func NeedsEnrollment(identityPath string) bool {
 
 // Register posts to <controllerURL>/enroll and polls until approved.
 // Pins retries to response.node_url when provided (enrollment windows are per-node).
-func Register(controllerURL, hostname, osName, arch, fingerprint string, agentData map[string]any) (jwt, slug string, err error) {
+func Register(ctx context.Context, controllerURL, hostname, osName, arch, fingerprint string, agentData map[string]any) (jwt, slug string, err error) {
 	if controllerURL == "" {
 		return "", "", fmt.Errorf("enroll: controller_url required")
 	}
@@ -54,13 +55,23 @@ func Register(controllerURL, hostname, osName, arch, fingerprint string, agentDa
 	pollURL := controllerURL + "/enroll"
 	client := &http.Client{Timeout: 30 * time.Second}
 	for {
-		body, _ := json.Marshal(req)
+		body, err := json.Marshal(req)
+		if err != nil {
+			return "", "", fmt.Errorf("enroll: marshal request: %w", err)
+		}
 		resp, err := client.Post(pollURL, "application/json", bytes.NewReader(body))
 		if err != nil {
 			return "", "", fmt.Errorf("enroll: POST %s: %w", pollURL, err)
 		}
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			return "", "", fmt.Errorf("enroll: server error %d from %s", resp.StatusCode, pollURL)
+		}
 		var result enrollResponse
-		json.NewDecoder(resp.Body).Decode(&result)
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			resp.Body.Close()
+			return "", "", fmt.Errorf("enroll: decode response from %s: %w", pollURL, err)
+		}
 		resp.Body.Close()
 
 		switch result.Status {
@@ -76,7 +87,11 @@ func Register(controllerURL, hostname, osName, arch, fingerprint string, agentDa
 			if result.NodeURL != "" {
 				pollURL = result.NodeURL + "/enroll"
 			}
-			time.Sleep(wait)
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return "", "", ctx.Err()
+			}
 		}
 	}
 }
