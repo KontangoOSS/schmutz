@@ -38,7 +38,14 @@ func TestRegister_approved(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jwt, slug, err := enroll.Register(context.Background(), srv.URL, "host", "linux", "amd64", "fp123", nil)
+	info := enroll.DeviceInfo{
+		Hostname:    "host",
+		OS:          "linux",
+		Arch:        "amd64",
+		Platform:    "lxc",
+		Fingerprint: "fp123",
+	}
+	jwt, slug, err := enroll.Register(context.Background(), srv.URL, info)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +66,8 @@ func TestRegister_banned(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, _, err := enroll.Register(context.Background(), srv.URL, "host", "linux", "amd64", "fp", nil)
+	info := enroll.DeviceInfo{Hostname: "host", OS: "linux", Arch: "amd64", Fingerprint: "fp"}
+	_, _, err := enroll.Register(context.Background(), srv.URL, info)
 	if err == nil {
 		t.Fatal("expected error for banned device")
 	}

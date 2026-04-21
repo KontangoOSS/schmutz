@@ -7,11 +7,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/KontangoOSS/schmutz/agent"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
+	"github.com/KontangoOSS/schmutz/internal/join"
 	"github.com/KontangoOSS/schmutz/root"
 	"github.com/openziti/sdk-golang/ziti"
 	"github.com/spf13/cobra"
@@ -45,9 +46,9 @@ func enrollCmd() *cobra.Command {
 				log.Println("schmutz: already enrolled")
 				return nil
 			}
-			hostname, _ := os.Hostname()
-			log.Printf("schmutz: registering with %s", r.ControllerURL())
-			jwt, slug, err := enroll.Register(cmd.Context(), r.ControllerURL(), hostname, runtime.GOOS, runtime.GOARCH, "unknown", nil)
+			info := collectDeviceInfo()
+			log.Printf("schmutz: registering with %s (fingerprint=%s platform=%s)", r.ControllerURL(), info.Fingerprint, info.Platform)
+			jwt, slug, err := enroll.Register(cmd.Context(), r.ControllerURL(), info)
 			if err != nil {
 				return fmt.Errorf("register: %w", err)
 			}
@@ -76,9 +77,9 @@ func startCmd() *cobra.Command {
 
 			identityPath, _ := r.IdentityPath()
 			if enroll.NeedsEnrollment(identityPath) {
-				hostname, _ := os.Hostname()
-				log.Printf("schmutz: not enrolled, registering with %s", r.ControllerURL())
-				jwt, slug, err := enroll.Register(cmd.Context(), r.ControllerURL(), hostname, runtime.GOOS, runtime.GOARCH, "unknown", nil)
+				info := collectDeviceInfo()
+				log.Printf("schmutz: not enrolled, registering with %s (fingerprint=%s platform=%s)", r.ControllerURL(), info.Fingerprint, info.Platform)
+				jwt, slug, err := enroll.Register(cmd.Context(), r.ControllerURL(), info)
 				if err != nil {
 					return fmt.Errorf("register: %w", err)
 				}
@@ -167,6 +168,55 @@ func versionCmd() *cobra.Command {
 		Short: "Print version",
 		Run:   func(_ *cobra.Command, _ []string) { fmt.Println(version) },
 	}
+}
+
+// collectDeviceInfo gathers the machine fingerprint and platform for enrollment.
+// Uses the existing join.Collect() which reads /etc/machine-id, MACs, etc.
+func collectDeviceInfo() enroll.DeviceInfo {
+	fp, err := join.Collect()
+	if err != nil {
+		log.Printf("schmutz: fingerprint collection failed: %v (proceeding with partial data)", err)
+		hostname, _ := os.Hostname()
+		return enroll.DeviceInfo{
+			Hostname: hostname,
+			OS:       "linux",
+			Arch:     "amd64",
+		}
+	}
+	return enroll.DeviceInfo{
+		Hostname:    fp.Hostname,
+		OS:          fp.OS,
+		Arch:        fp.Arch,
+		Platform:    detectPlatform(),
+		MachineID:   fp.MachineID,
+		Fingerprint: fp.HardwareHash,
+	}
+}
+
+// detectPlatform returns the execution environment type.
+// Mirrors detect.detectPlatform but as a standalone function to avoid
+// importing the pipeline-based detect package from main.
+func detectPlatform() string {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return "docker"
+	}
+	if data, _ := os.ReadFile("/proc/1/environ"); len(data) > 0 {
+		for _, e := range strings.Split(string(data), "\x00") {
+			if e == "container=lxc" {
+				return "lxc"
+			}
+		}
+	}
+	if data, _ := os.ReadFile("/sys/class/dmi/id/product_name"); len(data) > 0 {
+		name := strings.ToLower(strings.TrimSpace(string(data)))
+		switch {
+		case strings.Contains(name, "droplet"), strings.Contains(name, "google compute"), strings.Contains(name, "amazon ec2"):
+			return "cloud"
+		case strings.Contains(name, "virtualbox"), strings.Contains(name, "vmware"), strings.Contains(name, "kvm"), strings.Contains(name, "qemu"):
+			return "vm"
+		}
+	}
+	return "baremetal"
 }
 
 func proxyConn(zitiConn net.Conn, localAddr string) {
