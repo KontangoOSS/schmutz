@@ -175,6 +175,7 @@ func proxyConn(zitiConn net.Conn, localAddr string) {
 	go func() { copyAndClose(local, zitiConn, done) }()
 	go func() { copyAndClose(zitiConn, local, done) }()
 	<-done
+	<-done // wait for both halves
 }
 
 func copyAndClose(dst, src net.Conn, done chan struct{}) {
