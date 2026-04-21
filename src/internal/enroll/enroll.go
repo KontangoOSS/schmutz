@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/openziti/sdk-golang/ziti"
 	zitiEnroll "github.com/openziti/sdk-golang/ziti/enroll"
 )
 
@@ -127,10 +128,13 @@ func EnrollJWT(jwtStr, identityPath string) error {
 	if err != nil {
 		return fmt.Errorf("enroll: parse JWT: %w", err)
 	}
+	var keyAlg ziti.KeyAlgVar
+	_ = keyAlg.Set("EC")
 	flags := zitiEnroll.EnrollmentFlags{
 		Token:     claims,
 		JwtToken:  jwtToken,
 		JwtString: jwtStr,
+		KeyAlg:    keyAlg,
 	}
 	enrolled, err := zitiEnroll.Enroll(flags)
 	if err != nil {

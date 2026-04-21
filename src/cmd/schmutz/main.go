@@ -56,6 +56,9 @@ func enrollCmd() *cobra.Command {
 			if err := enroll.EnrollJWT(jwt, identityPath); err != nil {
 				return fmt.Errorf("enroll JWT: %w", err)
 			}
+			if err := r.SetSlug(slug); err != nil {
+				log.Printf("schmutz: warn: could not persist slug: %v", err)
+			}
 			log.Printf("schmutz: identity written to %s", identityPath)
 			return nil
 		},
@@ -87,6 +90,9 @@ func startCmd() *cobra.Command {
 				if err := enroll.EnrollJWT(jwt, identityPath); err != nil {
 					return fmt.Errorf("enroll JWT: %w", err)
 				}
+				if err := r.SetSlug(slug); err != nil {
+					log.Printf("schmutz: warn: could not persist slug: %v", err)
+				}
 			}
 
 			a, err := agent.NewAgent(agent.DefaultConfig(), r)
@@ -94,10 +100,13 @@ func startCmd() *cobra.Command {
 				return err
 			}
 
-			deviceID := r.DeviceID()
+			slug := r.Slug()
+			if slug == "" {
+				slug = r.DeviceID()
+			}
 			defaultServices := []*agent.ServiceRequest{
-				{Name: "ssh." + deviceID + ".tango", LocalAddr: "localhost:22", BackendMode: "tcpTunnel"},
-				{Name: "nats." + deviceID + ".tango", LocalAddr: "localhost:4222", BackendMode: "tcpTunnel"},
+				{Name: "ssh-" + slug, LocalAddr: "localhost:22", BackendMode: "tcpTunnel"},
+				{Name: "nats-" + slug, LocalAddr: "localhost:4222", BackendMode: "tcpTunnel"},
 			}
 
 			c := make(chan os.Signal, 1)
