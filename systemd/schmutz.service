@@ -1,0 +1,21 @@
+[Unit]
+Description=Schmutz TangoKore Agent
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=schmutz
+Group=schmutz
+ExecStart=/usr/local/bin/schmutz start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/schmutz /var/lib/schmutz
+
+[Install]
+WantedBy=multi-user.target
