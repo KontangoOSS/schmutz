@@ -36,6 +36,15 @@ type Root interface {
 
 	// SetSlug persists the enrollment slug to manifest.yaml.
 	SetSlug(slug string) error
+
+	// SetControllerURL persists the controller URL to manifest.yaml.
+	// Used by `schmutz enroll --controller` on first-time installs.
+	SetControllerURL(url string) error
+
+	// Services returns the Ziti service names bound by this device.
+	Services() []string
+	// SetServices persists the service names to manifest.yaml.
+	SetServices(services []string) error
 }
 
 type schmutzRoot struct {
@@ -85,6 +94,18 @@ func (r *schmutzRoot) SetSlug(slug string) error {
 	return r.writeManifest()
 }
 
+func (r *schmutzRoot) SetControllerURL(url string) error {
+	r.cfg.ControllerURL = url
+	return r.writeManifest()
+}
+
+func (r *schmutzRoot) Services() []string { return r.cfg.Services }
+
+func (r *schmutzRoot) SetServices(services []string) error {
+	r.cfg.Services = services
+	return r.writeManifest()
+}
+
 func (r *schmutzRoot) writeManifest() error {
 	data, err := yaml.Marshal(r.cfg)
 	if err != nil {
@@ -94,8 +115,8 @@ func (r *schmutzRoot) writeManifest() error {
 }
 
 func (r *schmutzRoot) Validate() error {
-	if r.cfg.DeviceID == "" {
-		return fmt.Errorf("root: device_id required in manifest.yaml")
+	if r.cfg.ControllerURL == "" {
+		return fmt.Errorf("root: controller_url required in manifest.yaml (or use --controller flag)")
 	}
 	return nil
 }
@@ -104,7 +125,8 @@ func (r *schmutzRoot) Validate() error {
 type config struct {
 	DeviceID      string `yaml:"device_id"`
 	ControllerURL string `yaml:"controller_url"`
-	Slug          string `yaml:"slug,omitempty"`
+	Slug          string   `yaml:"slug,omitempty"`
+	Services      []string `yaml:"services,omitempty"`
 
 	// Zitadel machine account — for TangoKore API auth (not for Ziti)
 	ZitadelIssuer       string `yaml:"zitadel_issuer,omitempty"`

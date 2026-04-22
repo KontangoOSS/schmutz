@@ -81,3 +81,34 @@ func TestRoot_validateMissingDeviceID(t *testing.T) {
 		t.Error("expected Validate() to error when device_id is empty")
 	}
 }
+
+func TestSetAndGetServices(t *testing.T) {
+	dir := t.TempDir()
+	r, err := root.LoadRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Initially empty
+	if got := r.Services(); len(got) != 0 {
+		t.Errorf("expected empty services, got %v", got)
+	}
+	// Set and retrieve
+	want := []string{"ssh-web-1", "http-web-1"}
+	if err := r.SetServices(want); err != nil {
+		t.Fatal(err)
+	}
+	// Reload from disk
+	r2, err := root.LoadRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r2.Services()
+	if len(got) != len(want) {
+		t.Fatalf("services: got %v, want %v", got, want)
+	}
+	for i, s := range want {
+		if got[i] != s {
+			t.Errorf("services[%d]: got %q, want %q", i, got[i], s)
+		}
+	}
+}
