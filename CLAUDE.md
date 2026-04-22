@@ -128,3 +128,37 @@ schmutz agent                                               # Run the agent (aft
 schmutz run                                                 # Run as edge gateway (controller nodes)
 schmutz bootstrap                                           # Re-run post-approval bootstrap only
 ```
+
+## SDK rules — non-negotiable
+
+- **Only the Go SDK.** Use `github.com/openziti/sdk-golang` for all Ziti integration. No C SDK (`ziti-sdk-c`), no cgo, no `ziti` binary subprocess for tunnel operations.
+- **Current version:** `github.com/openziti/sdk-golang v1.7.0` — compatible with OpenZiti v2.0.0-pre11+. Update this comment when bumping.
+- **No OIDC on machine identities.** Machine identities use cert-only auth (set by the controller at enrollment). Never add OIDC flows to the agent.
+- **No `ziti` binary subprocess for tunneling.** `exec.Command("ziti", "tunnel", ...)` is forbidden. The Go SDK provides `ctx.Listen()` and `ctx.Dial()` — use them.
+- **`EnrollJWT` may use the Go SDK's `Enroll()` function** — not the CLI. The `ziti edge enroll` subprocess is also forbidden.
+
+## Certificate separation — non-negotiable
+
+Three cert types exist in this system. They must never be mixed:
+
+| Type | Issuer | Used for | Lives in |
+|------|--------|----------|----------|
+| Ziti identity cert | Ziti controller intermediate CA (NetFoundry PKI) | Overlay authentication | `/etc/schmutz/identity.json` |
+| LE/public TLS cert | Let's Encrypt | Public HTTPS (Caddy) | Caddy cert store |
+| SPIFFE URI | Embedded in Ziti cert by controller PKI | Internal overlay routing only | Inside `identity.json` |
+
+- Never use the Bao/Kontango system CA to issue Ziti identity certs.
+- Never use Ziti identity certs for public TLS.
+- SPIFFE URIs are internal-only — never expose them externally or use them for public routing.
+- The `validateIdentityCA()` check in `enroll.go` enforces this at runtime — do not remove it.
+
+## Enrollment protocol — do not change
+
+The SSE call-and-response protocol in `internal/enroll/enroll.go` (`Register()`) is the contract between the agent and the controller. Changes to this protocol require coordinated changes in `schmutz-controller`. The protocol:
+
+1. Agent POSTs device info to `POST /api/enroll/stream` with `Accept: text/event-stream`
+2. Controller streams: `verify` → `decision` → `progress` → `identity`
+3. `identity` event contains fully enrolled identity JSON — write directly to disk
+4. Service names in `identity.services` drive which Ziti services the agent binds
+
+Do not add JWT exchange steps, polling loops, or additional HTTP roundtrips to enrollment.
