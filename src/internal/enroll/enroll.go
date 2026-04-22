@@ -30,6 +30,7 @@ type DeviceInfo struct {
 	Platform    string
 	MachineID   string
 	Fingerprint string
+	Profile     string
 	AgentData   map[string]any
 }
 
@@ -118,6 +119,7 @@ func buildEnrollPayload(info DeviceInfo) ([]byte, error) {
 	set("platform", info.Platform)
 	set("machine_id", info.MachineID)
 	set("hardware_hash", info.Fingerprint)
+	set("profile", info.Profile)
 
 	if fp != nil {
 		// Fill gaps from fingerprint

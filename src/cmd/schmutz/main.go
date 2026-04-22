@@ -29,6 +29,7 @@ func main() {
 func enrollCmd() *cobra.Command {
 	var controllerURL string
 	var force bool
+	var profile string
 	cmd := &cobra.Command{
 		Use:   "enroll",
 		Short: "Register this device and enroll its Ziti identity",
@@ -61,6 +62,7 @@ func enrollCmd() *cobra.Command {
 				os.Remove(identityPath)
 			}
 			info := collectDeviceInfo()
+			info.Profile = profile
 			log.Printf("schmutz: registering with %s (fingerprint=%s platform=%s)",
 				r.ControllerURL(), info.Fingerprint, info.Platform)
 			result, err := enroll.Register(cmd.Context(), r.ControllerURL(), info)
@@ -90,6 +92,7 @@ func enrollCmd() *cobra.Command {
 	cmd.Flags().StringVar(&controllerURL, "controller", "",
 		"TangoKore controller URL (required on first install, e.g. https://ctrl.konoss.org)")
 	cmd.Flags().BoolVar(&force, "force", false, "re-enroll even if identity already exists")
+	cmd.Flags().StringVar(&profile, "profile", "", "device profile (e.g. edge-router, application, laptop, cellphone)")
 	return cmd
 }
 
