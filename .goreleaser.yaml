@@ -20,9 +20,9 @@ version: 2
 
 project_name: schmutz
 
-# Forgejo is API-compatible with Gitea. Point goreleaser at our overlay-served
-# Forgejo (or the LAN URL when running locally). Override at run time with
-# GITEA_BASE_URL env or by editing this file.
+# Forgejo is API-compatible with Gitea. Public URLs by default; releases run
+# from inside the LAN can override with GITEA_API_URL to use the local
+# Forgejo address directly (avoids the Caddy/overlay round-trip).
 gitea_urls:
   api: https://git.konoss.org/api/v1/
   download: https://git.konoss.org
