@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/KontangoOSS/schmutz/internal/join"
+	"github.com/KontangoOSS/schmutz/pkg/schmutz/discovery"
 	ziti "github.com/openziti/sdk-golang/ziti"
 	zitiEnroll "github.com/openziti/sdk-golang/ziti/enroll"
 )
@@ -100,11 +101,36 @@ func Register(ctx context.Context, controllerURL string, info DeviceInfo) (*Enro
 // it as a flat JSON KV map. The controller accepts any keys — it extracts what
 // it knows about and stores the rest for audit. More data = better fingerprint
 // matching and verification confidence.
+//
+// As of v0.3.1 the layered discovery package (pkg/schmutz/discovery) is the
+// primary source. We still merge the legacy join.Collect() output so existing
+// fields the controller already extracts (cpu_info, kernel, etc.) keep working.
 func buildEnrollPayload(info DeviceInfo) ([]byte, error) {
 	fp, _ := join.Collect()
 
+	// Run the layered discovery probe — L0/L1 always, L2/L3 if root.
+	// L4 (network egress, geolocation) is opt-in via env var so a default
+	// schmutz install doesn't reveal the device's existence to third parties.
+	layers := discovery.LocalLayers()
+	if os.Getenv("SCHMUTZ_DISCOVER_PUBLIC") == "1" {
+		layers = discovery.AllLayers()
+	}
+	disc := discovery.Probe{Layers: layers}.Run(context.Background())
+
 	payload := map[string]any{
-		"method": enrollMethod(fp),
+		"method":               enrollMethod(fp),
+		"schmutz_layers_run":   disc.Layers,
+		"schmutz_layers_skip":  disc.Skipped,
+		"schmutz_privilege":    disc.Privilege,
+		"schmutz_facts_count":  len(disc.Facts),
+	}
+	if len(disc.Errors) > 0 {
+		payload["schmutz_errors"] = disc.Errors
+	}
+	// Merge the new discovery facts as flat KV — preserves the existing
+	// stream contract the controller expects.
+	for k, v := range disc.FlatKV() {
+		payload[k] = v
 	}
 
 	// Basic identity — from DeviceInfo (caller-supplied) with fp fallback
@@ -151,7 +177,9 @@ func buildEnrollPayload(info DeviceInfo) ([]byte, error) {
 	// OS version string (e.g. "Ubuntu 24.04 LTS")
 	set("os_version", join.DetectOSVersion())
 
-	// Root-level extras — only available when running as root
+	// Device class is now set by the layered discovery merged above.
+	// Root-level extras still pulled by the legacy collector for fields the
+	// controller already extracts and the new discovery hasn't moved yet.
 	if runtime.GOOS == "linux" {
 		collectLinuxRoot(payload)
 	}
@@ -477,7 +505,12 @@ func EnrollJWT(jwtStr, identityPath string) error {
 
 	cfg, err := zitiEnroll.Enroll(flags)
 	if err != nil {
-		return fmt.Errorf("enroll: ziti sdk enroll: %w", err)
+		// The Ziti SDK enroll posts to the controller's edge API on a non-443
+		// port (typically 1280 today). When that port is blocked — captive
+		// portals, locked-down hotel WiFi, restrictive corp egress — this is
+		// the failure mode. Surface a hint so the user doesn't think the
+		// enrollment endpoint is broken when their network is the problem.
+		return fmt.Errorf("enroll: ziti sdk enroll: %w (your network may block port 1280; try tethering or another network — see docs/TECH-DEBT.md)", err)
 	}
 
 	data, err := json.Marshal(cfg)

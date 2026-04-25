@@ -1,6 +1,15 @@
 # Build artifacts — distributed via releases, not git
-build/binary/
+build/
+dist/
+bin/
 *.exe
+
+# Stray binaries from local builds
+/schmutz
+/schmutz-amd64
+/schmutz-arm64
+src/schmutz
+src/schmutz-controller
 
 # Go
 *.test

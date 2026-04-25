@@ -1,0 +1,149 @@
+# GoReleaser config for the schmutz agent.
+#
+# This builds two artifacts per arch:
+#   1. The schmutz binary (pure Go, statically linked, CGO_ENABLED=0)
+#   2. A tarball that bundles schmutz alongside the upstream `ziti` CLI binary
+#      pinned to ZITI_VERSION below. This is the recommended install
+#      payload for bare-metal / VM / LXC deployments.
+#
+# A Docker image is also produced — alpine-based (small, has libc for ziti),
+# with both binaries plus a smart entrypoint that auto-enrolls if needed.
+#
+# Quick reference:
+#   goreleaser release --snapshot --clean   # local test build, no publish
+#   goreleaser release --clean              # real release on a tag push
+#
+# The ZITI_VERSION env var pins which upstream Ziti CLI we bundle. Bump it
+# deliberately in PR review when NetFoundry ships changes we want.
+
+version: 2
+
+project_name: schmutz
+
+env:
+  - ZITI_VERSION=2.0.0-pre11
+  - CGO_ENABLED=0
+
+before:
+  hooks:
+    # Sanity check: tests must pass before we cut a release
+    - sh -c "cd src && go test ./..."
+    # Pre-fetch the upstream ziti CLI for both architectures so the archive
+    # step has them available locally. Output goes to build/vendored-ziti/.
+    - bash scripts/fetch-ziti.sh
+
+builds:
+  - id: schmutz
+    main: ./cmd/schmutz
+    dir: src
+    binary: schmutz
+    goos: [linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: tarball
+    ids: [schmutz]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      # Bundle the upstream ziti binary alongside our own. The wildcard would
+      # include both arches in each archive, so we use templated paths with
+      # GOARCH selection via the strip_parent option below.
+      - src: "build/vendored-ziti/ziti-linux-{{ .Arch }}"
+        dst: ziti
+        info:
+          mode: 0755
+      - LICENSE
+      - README.md
+      - src: docs/TECH-DEBT.md
+        dst: docs/TECH-DEBT.md
+      - src: systemd/schmutz.service
+        dst: systemd/schmutz.service
+
+checksum:
+  name_template: "schmutz-SHA256SUMS"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+# Forgejo-hosted release. The `gitea` release type is API-compatible with
+# Forgejo; goreleaser doesn't have a Forgejo native target.
+release:
+  disable: false
+  gitea:
+    owner: kore
+    name: schmutz
+  draft: false
+  prerelease: auto
+
+dockers:
+  # amd64 image
+  - id: schmutz-amd64
+    image_templates:
+      - "git.konoss.org/kore/schmutz:{{ .Version }}-amd64"
+      - "git.konoss.org/kore/schmutz:latest-amd64"
+    use: docker
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile
+    extra_files:
+      - build/vendored-ziti/ziti-linux-amd64
+      - scripts/docker-entrypoint.sh
+      - systemd/schmutz.service
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=ZITI_BIN=build/vendored-ziti/ziti-linux-amd64"
+      - "--label=org.opencontainers.image.title=schmutz"
+      - "--label=org.opencontainers.image.description=TangoKore Ziti agent"
+      - "--label=org.opencontainers.image.source=https://git.konoss.org/kore/schmutz"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+
+  # arm64 image
+  - id: schmutz-arm64
+    image_templates:
+      - "git.konoss.org/kore/schmutz:{{ .Version }}-arm64"
+      - "git.konoss.org/kore/schmutz:latest-arm64"
+    use: docker
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile
+    extra_files:
+      - build/vendored-ziti/ziti-linux-arm64
+      - scripts/docker-entrypoint.sh
+      - systemd/schmutz.service
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=ZITI_BIN=build/vendored-ziti/ziti-linux-arm64"
+      - "--label=org.opencontainers.image.title=schmutz"
+      - "--label=org.opencontainers.image.description=TangoKore Ziti agent"
+      - "--label=org.opencontainers.image.source=https://git.konoss.org/kore/schmutz"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+
+# Multi-arch manifest combining both images under a single tag.
+docker_manifests:
+  - name_template: "git.konoss.org/kore/schmutz:{{ .Version }}"
+    image_templates:
+      - "git.konoss.org/kore/schmutz:{{ .Version }}-amd64"
+      - "git.konoss.org/kore/schmutz:{{ .Version }}-arm64"
+  - name_template: "git.konoss.org/kore/schmutz:latest"
+    image_templates:
+      - "git.konoss.org/kore/schmutz:latest-amd64"
+      - "git.konoss.org/kore/schmutz:latest-arm64"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - "Merge pull request"

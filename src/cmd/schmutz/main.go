@@ -15,12 +15,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.3.0"
-const schmutzDir = "/etc/schmutz"
+// Version is set at link time by GoReleaser via -ldflags "-X main.Version=..."
+// Defaults to a dev string when built directly with `go build`.
+var Version = "0.3.1-dev"
+
+const (
+	schmutzDir       = "/etc/schmutz"
+	defaultBinPath   = "/usr/local/bin/schmutz"
+	defaultZitiPath  = "/usr/local/bin/ziti"
+	systemdUnitPath  = "/etc/systemd/system/schmutz.service"
+)
 
 func main() {
-	rootCmd := &cobra.Command{Use: "schmutz", Short: "Schmutz — TangoKore device agent"}
-	rootCmd.AddCommand(enrollCmd(), startCmd(), versionCmd())
+	rootCmd := &cobra.Command{
+		Use:   "schmutz",
+		Short: "Schmutz — TangoKore device agent",
+		Long:  "Schmutz is a thin opinionated wrapper around the Ziti tunnel CLI plus device discovery, enrollment, and lifecycle management for TangoKore.",
+	}
+	rootCmd.AddCommand(
+		enrollCmd(),
+		startCmd(),
+		tunnelCmd(),
+		statusCmd(),
+		fingerprintCmd(),
+		installServiceCmd(),
+		uninstallCmd(),
+		updateCmd(),
+		versionCmd(),
+	)
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
@@ -34,6 +56,9 @@ func enrollCmd() *cobra.Command {
 		Use:   "enroll",
 		Short: "Register this device and enroll its Ziti identity",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if enroll.IsControllerNode() {
+				return fmt.Errorf("schmutz: this machine is a Ziti controller node — schmutz agent must not run here")
+			}
 			r, err := root.LoadRoot(schmutzDir)
 			if err != nil {
 				return err
@@ -92,7 +117,7 @@ func enrollCmd() *cobra.Command {
 	cmd.Flags().StringVar(&controllerURL, "controller", "",
 		"TangoKore controller URL (required on first install, e.g. https://ctrl.konoss.org)")
 	cmd.Flags().BoolVar(&force, "force", false, "re-enroll even if identity already exists")
-	cmd.Flags().StringVar(&profile, "profile", "", "device profile (e.g. edge-router, application, laptop, cellphone)")
+	cmd.Flags().StringVar(&profile, "profile", "server", "device profile (e.g. server, laptop, workstation)")
 	return cmd
 }
 
@@ -101,6 +126,9 @@ func startCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Start the Schmutz agent — bind overlay services",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if enroll.IsControllerNode() {
+				return fmt.Errorf("schmutz: this machine is a Ziti controller node — schmutz agent must not run here")
+			}
 			r, err := root.LoadRoot(schmutzDir)
 			if err != nil {
 				return err
@@ -190,7 +218,7 @@ func versionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version",
-		Run:   func(_ *cobra.Command, _ []string) { fmt.Println(version) },
+		Run:   func(_ *cobra.Command, _ []string) { fmt.Println(Version) },
 	}
 }
 
