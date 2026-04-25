@@ -75,3 +75,10 @@ The agent runs the full enrollment flow and exits when complete. A separate serv
 - Stream traffic runs over plain HTTPS during enrollment — the device has no Ziti identity yet.
 - The `/stream` endpoint accepts any JSON with `fingerprint` and `stream_token`. Extra fields are stored and passed to the decision engine.
 - A custom `id` field in the enrollment payload allows device attribution (e.g. a user ID or asset tag).
+
+## Documentation
+
+- [DESIGN.md](docs/DESIGN.md) — current two-phase enrollment design
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and pipeline
+- [IDENTITY.md](docs/IDENTITY.md) — Ziti identity model
+- [COMPOSITE-IDENTITY.md](docs/COMPOSITE-IDENTITY.md) — **composite-key identity, attestation classes, microservice split, initramfs hook (the network-plane design)**
