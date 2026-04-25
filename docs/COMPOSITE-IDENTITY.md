@@ -44,7 +44,7 @@ composite_key = HKDF( machine_secret, bao_secret, identity_name, salt )
 | Side | Lives where | Lifetime | Access |
 |---|---|---|---|
 | `machine_secret` | TPM-sealed (preferred) or LUKS-sealed file | Persists across OS reinstall on same hardware | Only the machine itself |
-| `bao_secret` | `infrastructure/secret/<name>/composite` in Bao | Persists until entity is decommissioned | Admin-only direct read; verifier service for composite check |
+| `bao_secret` | `assets/secret/<name>/composite` in Bao | Persists until entity is decommissioned | Admin-only direct read; verifier service for composite check |
 
 **Properties:**
 
@@ -96,7 +96,7 @@ the class, and the user is told what their machine can and cannot do.
 | Approle `secret-id` | For Bao login; TPM-sealed if possible, else LUKS-sealed |
 | Local read-cache of own entity | Allows boot when Bao is briefly unreachable |
 
-### In Bao `infrastructure/identity/entity/<name>/metadata` (public-readable)
+### In Bao `assets/identity/entity/<name>/metadata` (public-readable)
 
 | Field | Purpose |
 |---|---|
@@ -110,7 +110,7 @@ the class, and the user is told what their machine can and cannot do.
 | `enrolled_at`, `last_attested_at` | Lifecycle timestamps |
 | `privilege_ceiling` | Mirror of class-derived ceiling for visibility |
 
-### In Bao `infrastructure/secret/<name>/` (admin-only direct read)
+### In Bao `assets/secret/<name>/` (admin-only direct read)
 
 | Path | Why it's admin-only |
 |---|---|
@@ -210,7 +210,7 @@ split it into focused components, each with a clear contract.
 │                            ┌──────────────────────┐                 │
 │                            │ tinkerbell           │                 │
 │                            │ (super-admin in      │                 │
-│                            │  Bao infrastructure/)│                 │
+│                            │  Bao assets/)│                 │
 │                            └──────────┬───────────┘                 │
 │                                       │                              │
 │                            ┌──────────▼───────────┐                 │
@@ -220,12 +220,12 @@ split it into focused components, each with a clear contract.
 │                            │  to Bao)             │                 │
 │                            └──────────────────────┘                 │
 │                                                                      │
-│  ┌──────────────────────┐                                           │
-│  │ schmutz-flavors      │  (kore/schmutz-flavors/ — see §7)         │
-│  │ (per-service recipes │                                           │
-│  │  pulled at apply-    │                                           │
-│  │  time by agent)      │                                           │
-│  └──────────────────────┘                                           │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ schmutz-controller/flavors/  (per-service recipes — see §7)  │  │
+│  │ Lives INSIDE schmutz-controller repo so each controller node │  │
+│  │ ships its own flavor catalog. Beta-test per-node by deploying│  │
+│  │ different controller releases.                               │  │
+│  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -320,7 +320,7 @@ A tiny Go service that mediates composite-key verification. Runs alongside
 Bao on the same hosts (sidecar pattern).
 
 - Reads `bao_secret` from Bao using a narrow approle (`attest-verifier`
-  policy, read-only on `infrastructure/secret/*/composite`)
+  policy, read-only on `assets/secret/*/composite`)
 - Receives `(name, challenge, machine_proof)` from a machine
 - Computes `expected = HMAC(bao_secret, challenge)`
 - Combines with `machine_proof` per the composite algorithm
@@ -330,7 +330,7 @@ Bao on the same hosts (sidecar pattern).
 
 The verifier is small enough to audit thoroughly. Bao itself is not modified.
 
-### 6.8 `tinkerbell` — super-admin in `infrastructure/`
+### 6.8 `tinkerbell` — super-admin in `assets/`
 
 Holds the `tinkerbell-admin` approle. Owns the lifecycle:
 
@@ -369,7 +369,7 @@ time, on any box.
 ### 7.2 Manifest schema
 
 ```yaml
-# kore/schmutz-flavors/ticketarr/manifest.yaml
+# kore/schmutz-controller/flavors/ticketarr/flavor.yaml
 flavor: ticketarr
 version: 1.2.0
 
@@ -433,31 +433,50 @@ requires_attestation_class: [tpm-secureboot, tpm-only, luks, none]
 
 ### 7.3 Where flavors live
 
-A separate repo per flavor (or a monorepo of flavors), so:
+Flavors live **inside the schmutz-controller repo**, in a top-level
+`flavors/` directory:
 
 ```
-kore/schmutz-flavors/
-├── bare-host/
-│   ├── manifest.yaml
-│   ├── templates/
-│   └── tests/
-├── controller/
-├── hypervisor/
-├── postfix/
-├── ticketarr/
-├── arr-stack/
-├── forgejo/
-└── README.md
+kore/schmutz-controller/
+├── docs/
+│   └── EDGE-DESIGN.md
+├── flavors/                       ← the flavor catalog
+│   ├── README.md
+│   ├── _schema/
+│   │   └── flavor.schema.yaml
+│   ├── bare-host/
+│   │   ├── flavor.yaml
+│   │   ├── templates/
+│   │   └── README.md
+│   ├── controller/
+│   ├── hypervisor/
+│   ├── postfix/
+│   ├── ticketarr/
+│   └── ...
+└── src/
 ```
 
-**Why a separate repo from `schmutz/` itself:** flavors will change much more
-often than schmutz core. Flavor PRs shouldn't trigger schmutz CI. Different
-review groups apply (service maintainers review their own flavor; schmutz
-maintainers review schmutz core). And flavor versioning is independent.
+**Why inside schmutz-controller, not a separate repo:**
 
-The schmutz-agent pulls flavors at apply-time, caches locally at
-`/var/lib/schmutz/flavors/<name>@<version>/`, and re-fetches on `upgrade` or
-`reconcile`.
+- The controller serves flavors via `GET /api/flavors`. Catalog and server
+  ship together.
+- Each controller node has its own copy of `flavors/` baked in. ctrl-1 can
+  run a different controller release with different flavors than ctrl-2 —
+  beta-test per-node without cluster-wide coordination.
+- No external git dependency at runtime. Controllers don't `git pull` from
+  the public Internet during apply.
+- Single review group (schmutz-controller maintainers) own both the intake
+  protocol and the flavor catalog, so changes can be coordinated.
+
+The schmutz-agent on a machine fetches flavors via
+`GET https://controller/api/flavors/<name>` and caches locally at
+`/var/lib/schmutz/flavors/<name>@<version>/`. `upgrade` or `reconcile`
+re-fetches.
+
+**Note: this differs from app declarations.** Each app's repo (forked from
+templatarr) declares its OWN identity in `identity.yaml` — that's the WHO.
+The flavor in `schmutz-controller/flavors/<app>/flavor.yaml` declares HOW
+schmutz deploys that app. Two files, two repos, two concerns.
 
 ### 7.4 The Makefile-style CLI
 
@@ -633,9 +652,9 @@ Beyond apply/remove/upgrade, the agent continuously:
      "new machine seeking enrollment, class=X, MAC=Y"
 5. On approval, tinkerbell:
    - Generates bao_secret (32 random bytes)
-   - Creates entity in infrastructure/identity/entity/<name>
+   - Creates entity in assets/identity/entity/<name>
    - Writes public anchor metadata
-   - Writes bao_secret to infrastructure/secret/<name>/composite
+   - Writes bao_secret to assets/secret/<name>/composite
    - Mints approle for the entity, returns role_id+secret_id
    - Issues Ziti OTT for the entity's tier
 6. schmutz-init receives credentials:
@@ -706,10 +725,10 @@ policy: machine-self
   read   identity/entity/name/{{identity.entity.name}}
   read   auth/approle/role/{{identity.entity.name}}/role-id
   # Composite check happens through attest.tango — machines never
-  # read /infrastructure/secret/*/composite directly.
+  # read /assets/secret/*/composite directly.
 
 policy: attest-verifier
-  read   infrastructure/secret/+/composite
+  read   assets/secret/+/composite
   # Used only by attest.tango sidecar.
 
 policy: tinkerbell-admin (already exists)
@@ -723,7 +742,7 @@ policy: human-admin (you, future ops)
 
 policy: cluster-peer
   read identity/entity/name/* (only public anchor fields)
-  cannot read any /infrastructure/secret/* path
+  cannot read any /assets/secret/* path
 ```
 
 ---
@@ -773,7 +792,7 @@ The existing `register/` and `pipeline/` packages become subcomponents of
 Suggested order — each step is independently shippable and testable.
 
 1. **`libschmutz/hwidentity`** — collector that produces the full anchor JSON.
-   Run locally on every machine; populate `infrastructure/` entities with
+   Run locally on every machine; populate `assets/` entities with
    real Tier 1+2+3 values. No behavioral change yet.
 2. **`libschmutz/seal`** — TPM + LUKS sealing primitives. Test against pve and
    hank (have TPM); slim-1/2 (LUKS-only); a DO controller (no TPM, no LUKS,
@@ -793,9 +812,9 @@ Suggested order — each step is independently shippable and testable.
 9. **Roll out to network plane** — pve, hank, slim-1/2 get reinstalled with
    the new image during scheduled windows.
 10. **Roll out to edge plane** — workstation, lab fleet, customer hardware.
-11. **`schmutz-flavors` repo** — scaffold the flavor catalog repo
-    (`kore/schmutz-flavors/`). Start with `bare-host` and `tunnel-only` as
-    canonical examples.
+11. **`schmutz-controller/flavors/` directory** — scaffold the flavor catalog
+    inside the schmutz-controller repo. Start with `bare-host` and
+    `tunnel-only` as canonical examples. ✓ Done as of 2026-04-25.
 12. **`schmutz apply` / `remove` / `reconcile`** — implement the flavor
     lifecycle in the agent + CLI. Bao approle creation, ziti role-attribute
     additions, file rendering, systemd unit installation.
@@ -828,7 +847,7 @@ Suggested order — each step is independently shippable and testable.
 
 | Term | Definition |
 |---|---|
-| **Anchor** | The set of unforgeable hardware facts about a machine, stored in `infrastructure/identity/entity/<name>/metadata`. |
+| **Anchor** | The set of unforgeable hardware facts about a machine, stored in `assets/identity/entity/<name>/metadata`. |
 | **Attestation class** | The strongest sealing primitive a machine can use: `tpm-secureboot`, `tpm-only`, `luks`, or `none`. |
 | **Composite key** | Derived value requiring both `machine_secret` and `bao_secret` to compute. Used as the runtime authenticator. |
 | **Drift** | Change in a machine's attested facts since the last attestation. |
