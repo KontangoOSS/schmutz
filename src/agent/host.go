@@ -16,7 +16,6 @@ var servicePort = map[string]string{
 	"ssh-":   "127.0.0.1:22",
 	"http-":  "127.0.0.1:80",
 	"https-": "127.0.0.1:443",
-	"nats-":  "127.0.0.1:4222",
 }
 
 // localPortForService returns the local address to forward connections to

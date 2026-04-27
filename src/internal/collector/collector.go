@@ -134,22 +134,21 @@ func CollectProcesses() (*stream.ProcessData, error) {
 	}, nil
 }
 
-// CollectAll runs all collectors and returns a map of message type to data.
-func CollectAll() map[uint8]interface{} {
-	result := make(map[uint8]interface{})
+// Snapshot is a full point-in-time collection of all telemetry data.
+type Snapshot struct {
+	System  *stream.SystemData  `json:"system,omitempty"`
+	Network *stream.NetworkData `json:"network,omitempty"`
+	Disk    *stream.DiskData    `json:"disk,omitempty"`
+	Process *stream.ProcessData `json:"process,omitempty"`
+}
 
-	if sys, err := CollectSystem(); err == nil {
-		result[stream.MsgSystem] = sys
-	}
-	if net, err := CollectNetwork(); err == nil {
-		result[stream.MsgNetwork] = net
-	}
-	if d, err := CollectDisk(); err == nil {
-		result[stream.MsgDisk] = d
-	}
-	if procs, err := CollectProcesses(); err == nil {
-		result[stream.MsgProcess] = procs
-	}
-
-	return result
+// CollectAll gathers all available telemetry in one call.
+// Partial failures are silently skipped — best effort.
+func CollectAll() *Snapshot {
+	s := &Snapshot{}
+	s.System, _ = CollectSystem()
+	s.Network, _ = CollectNetwork()
+	s.Disk, _ = CollectDisk()
+	s.Process, _ = CollectProcesses()
+	return s
 }

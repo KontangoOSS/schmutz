@@ -7,10 +7,12 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/KontangoOSS/schmutz/agent"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
 	"github.com/KontangoOSS/schmutz/internal/join"
+	"github.com/KontangoOSS/schmutz/internal/telemetry"
 	"github.com/KontangoOSS/schmutz/root"
 	"github.com/spf13/cobra"
 )
@@ -201,6 +203,12 @@ func startCmd() *cobra.Command {
 			}()
 
 			log.Printf("schmutz: starting — slug=%s services=%v", slug, services)
+
+			// Start telemetry stream over Ziti.
+			tel := telemetry.NewDialer(identityPath, 30*time.Second)
+			go tel.Run()
+			defer tel.Stop()
+
 			go func() {
 				if err := a.StartService(req); err != nil {
 					log.Printf("schmutz: bind services: %v", err)

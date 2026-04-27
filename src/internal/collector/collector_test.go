@@ -2,8 +2,6 @@ package collector
 
 import (
 	"testing"
-
-	"github.com/KontangoOSS/schmutz/internal/stream"
 )
 
 func TestCollectSystemPopulated(t *testing.T) {
@@ -61,10 +59,19 @@ func TestCollectDiskHasMounts(t *testing.T) {
 func TestCollectAllReturnsAllTypes(t *testing.T) {
 	result := CollectAll()
 
-	keys := []uint8{stream.MsgSystem, stream.MsgNetwork, stream.MsgDisk, stream.MsgProcess}
-	for _, k := range keys {
-		if _, ok := result[k]; !ok {
-			t.Errorf("CollectAll() missing key 0x%02x (%s)", k, stream.MsgName(k))
-		}
+	if result == nil {
+		t.Fatal("CollectAll() returned nil")
+	}
+	if result.System == nil {
+		t.Error("CollectAll() missing System data")
+	}
+	if result.Network == nil {
+		t.Error("CollectAll() missing Network data")
+	}
+	if result.Disk == nil {
+		t.Error("CollectAll() missing Disk data")
+	}
+	if result.Process == nil {
+		t.Error("CollectAll() missing Process data")
 	}
 }
