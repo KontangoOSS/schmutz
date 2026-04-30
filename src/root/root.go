@@ -111,7 +111,7 @@ func (r *schmutzRoot) writeManifest() error {
 	if err != nil {
 		return fmt.Errorf("root: marshal manifest: %w", err)
 	}
-	return os.WriteFile(filepath.Join(r.dir, "manifest.yaml"), data, 0644)
+	return os.WriteFile(filepath.Join(r.dir, "manifest.yaml"), data, 0600)
 }
 
 func (r *schmutzRoot) Validate() error {

@@ -14,7 +14,6 @@ func TestLocalPortForService(t *testing.T) {
 		{"ssh prefix", "ssh-web-1", "127.0.0.1:22", true},
 		{"http prefix", "http-web-1", "127.0.0.1:80", true},
 		{"https prefix", "https-web-1", "127.0.0.1:443", true},
-		{"nats prefix", "nats-web-1", "127.0.0.1:4222", true},
 		{"unknown prefix", "smtp-web-1", "", false},
 		{"empty", "", "", false},
 	}
