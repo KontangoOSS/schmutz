@@ -6,11 +6,13 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/KontangoOSS/schmutz/agent"
+	"github.com/KontangoOSS/schmutz/internal/discover"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
 	"github.com/KontangoOSS/schmutz/internal/join"
 	"github.com/KontangoOSS/schmutz/internal/telemetry"
@@ -284,6 +286,15 @@ T&C is considered accepted at install time when running via systemd.`,
 			tel := telemetry.NewDialer(identityPath, 30*time.Second)
 			go tel.Run()
 			defer tel.Stop()
+
+			// Start service discovery in background — non-intrusive, periodic
+			disc := discover.NewDiscoverer(
+				filepath.Dir(identityPath), // /etc/schmutz
+				os.Getenv("BAO_ADDR"),
+				os.Getenv("BAO_TOKEN"),
+			).WithSlug(r.Slug())
+			go disc.Run()
+			defer disc.Stop()
 
 			// Bind any services already provisioned in the registry (re-start after
 			// approval). New machines start with zero services — they bind from
