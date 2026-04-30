@@ -14,6 +14,7 @@ import (
 func discoverCmd() *cobra.Command {
 	var jsonOut bool
 	var ports []int
+	var sourceDir string
 
 	cmd := &cobra.Command{
 		Use:   "discover",
@@ -50,6 +51,16 @@ Also writes /etc/schmutz/schema.json and publishes to Bao if configured.`,
 
 			result := discover.BuildResult(targets, r.Slug())
 
+			if sourceDir != "" {
+				fmt.Fprintf(os.Stderr, "Analyzing source at %s...\n", sourceDir)
+				routes, err := discover.ExtractGoRoutes(sourceDir)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: source analysis error: %v\n", err)
+				} else if len(routes) > 0 {
+					fmt.Fprintf(os.Stderr, "Found %d route hints from source\n", len(routes))
+				}
+			}
+
 			pub := discover.NewPublisher(
 				"/etc/schmutz",
 				os.Getenv("BAO_ADDR"),
@@ -84,5 +95,6 @@ Also writes /etc/schmutz/schema.json and publishes to Bao if configured.`,
 
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output JSON")
 	cmd.Flags().IntSliceVar(&ports, "ports", nil, "Ports to scan (default: common ports)")
+	cmd.Flags().StringVar(&sourceDir, "source", "", "Source directory to analyze with tree-sitter (optional enrichment)")
 	return cmd
 }
