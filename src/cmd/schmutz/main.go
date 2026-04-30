@@ -47,6 +47,7 @@ func main() {
 		uninstallCmd(),
 		updateCmd(),
 		versionCmd(),
+		discoverCmd(),
 	)
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
