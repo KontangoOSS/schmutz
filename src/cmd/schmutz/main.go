@@ -17,6 +17,7 @@ import (
 	"github.com/KontangoOSS/schmutz/internal/discover"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
 	"github.com/KontangoOSS/schmutz/internal/join"
+	"github.com/KontangoOSS/schmutz/internal/substrate"
 	"github.com/KontangoOSS/schmutz/internal/telemetry"
 	"github.com/KontangoOSS/schmutz/root"
 	"github.com/spf13/cobra"
@@ -52,6 +53,7 @@ func main() {
 		discoverCmd(),
 		baoEnrollCmd(),
 		baoLoginCmd(),
+		substrateTestCmd(),
 	)
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -312,6 +314,18 @@ T&C is considered accepted at install time when running via systemd.`,
 			go func() {
 				if err := baoDaemon.Run(baoCtx); err != nil {
 					log.Printf("baojwt: subsystem error: %v", err)
+				}
+			}()
+
+			// Substrate watcher: reads <tenant>/secret/data/apps/<app>/<deployment>/substrate
+			// every 24h, parses + validates, logs the reconciliation plan.
+			// v1 takes NO actions on the host — the reconciler that
+			// applies the plan to ziti-edge-tunnel + Caddy is a separate
+			// subsystem that arrives once the plan log is trusted.
+			substrateWatcher := substrate.NewWatcher(substrate.DefaultWatcherConfig())
+			go func() {
+				if err := substrateWatcher.Run(baoCtx); err != nil {
+					log.Printf("substrate: watcher error: %v", err)
 				}
 			}()
 
