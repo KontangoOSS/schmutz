@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -16,6 +17,10 @@ import (
 // return a fixed response or an error code.
 type fakeBao struct {
 	server *httptest.Server
+
+	// mu guards every mutable field below. The handlers + daemon
+	// access these concurrently in TestDaemon_*.
+	mu sync.Mutex
 
 	healthStatus int
 
@@ -54,49 +59,72 @@ func newFakeBao() *fakeBao {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/sys/health", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
 		f.calls.health++
-		w.WriteHeader(f.healthStatus)
+		st := f.healthStatus
+		f.mu.Unlock()
+		w.WriteHeader(st)
 	})
 	mux.HandleFunc("/v1/sys/wrapping/unwrap", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
 		f.calls.unwrap++
 		f.lastUnwrapAuthHeader = r.Header.Get("X-Vault-Token")
-		if f.unwrapStatus != http.StatusOK {
-			w.WriteHeader(f.unwrapStatus)
+		st := f.unwrapStatus
+		payload := f.unwrapPayload
+		f.mu.Unlock()
+		if st != http.StatusOK {
+			w.WriteHeader(st)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"data": f.unwrapPayload})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": payload})
 	})
 	mux.HandleFunc("/v1/auth/approle/login", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
 		f.calls.approle++
-		_ = json.NewDecoder(r.Body).Decode(&f.lastApproleBody)
-		if f.approleStatus != http.StatusOK {
-			w.WriteHeader(f.approleStatus)
+		f.lastApproleBody = body
+		st := f.approleStatus
+		tok := f.approleToken
+		f.mu.Unlock()
+		if st != http.StatusOK {
+			w.WriteHeader(st)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"auth": map[string]any{"client_token": f.approleToken},
+			"auth": map[string]any{"client_token": tok},
 		})
 	})
 	mux.HandleFunc("/v1/identity/oidc/token/", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
 		f.calls.oidc++
 		f.lastOIDCAuthHeader = r.Header.Get("X-Vault-Token")
-		if f.oidcStatus != http.StatusOK {
-			w.WriteHeader(f.oidcStatus)
+		st := f.oidcStatus
+		tok := f.oidcToken
+		f.mu.Unlock()
+		if st != http.StatusOK {
+			w.WriteHeader(st)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{"token": f.oidcToken},
+			"data": map[string]any{"token": tok},
 		})
 	})
 	mux.HandleFunc("/v1/auth/jwt/login", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
 		f.calls.jwt++
-		_ = json.NewDecoder(r.Body).Decode(&f.lastJWTBody)
-		if f.jwtStatus != http.StatusOK {
-			w.WriteHeader(f.jwtStatus)
+		f.lastJWTBody = body
+		st := f.jwtStatus
+		tok := f.jwtToken
+		f.mu.Unlock()
+		if st != http.StatusOK {
+			w.WriteHeader(st)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"auth": map[string]any{"client_token": f.jwtToken},
+			"auth": map[string]any{"client_token": tok},
 		})
 	})
 	f.server = httptest.NewServer(mux)

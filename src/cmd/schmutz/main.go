@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/KontangoOSS/schmutz/agent"
+	"github.com/KontangoOSS/schmutz/internal/baojwt"
 	"github.com/KontangoOSS/schmutz/internal/discover"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
 	"github.com/KontangoOSS/schmutz/internal/join"
@@ -298,6 +300,20 @@ T&C is considered accepted at install time when running via systemd.`,
 			).WithSlug(r.Slug())
 			go disc.Run()
 			defer disc.Stop()
+
+			// Start the bao-jwt subsystem. It refreshes /run/bao-token
+			// every 10 minutes from the persisted /etc/schmutz/agent.json.
+			// A missing agent.json is fine — the daemon logs and retries
+			// on each tick, so an operator can drop credentials in later
+			// without restarting.
+			baoCtx, baoCancel := context.WithCancel(cmd.Context())
+			defer baoCancel()
+			baoDaemon := baojwt.NewDaemon(baojwt.DefaultDaemonConfig())
+			go func() {
+				if err := baoDaemon.Run(baoCtx); err != nil {
+					log.Printf("baojwt: subsystem error: %v", err)
+				}
+			}()
 
 			// Bind any services already provisioned in the registry (re-start after
 			// approval). New machines start with zero services — they bind from
