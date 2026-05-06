@@ -1,39 +1,36 @@
-// Package substrate defines the on-disk + over-the-wire shape of a host's
-// substrate spec — the declarative description of what overlay services a
-// host binds, what local ports they front, and (for HTTP services) what
-// the local Caddy should expose.
+// Package shared holds the wire/disk schemas every component (controller,
+// agent, future tooling) reads or writes. One package per system, two
+// types currently:
 //
-// MVP storage shape (this file's Layout):
+//   - Substrate (this file): per-deployment host configuration written
+//     by the controller, read by the agent. Stored at
+//     <namespace>/secret/apps/<app>/<deployment>/substrate.
 //
-//	<namespace>/secret/apps/<app>/<deployment>/substrate
+//   - Blueprint (blueprint.go): per-app catalog metadata written by the
+//     operator/automation, read by anyone with public/ access. Stored
+//     at public/secret/applications/<app>.
 //
-// Single Bao KV v2 record per (namespace, app, deployment). The agent on
-// that host reads it via its bao-jwt-scoped token. Tenant isolation is
-// enforced at the Bao policy layer — a kontango agent's token cannot
-// read another namespace's substrate.
+// CROSS-REPO CONTRACT: this package is mirrored byte-for-byte between
+// kore/ziti-base/server/internal/shared/ and kore/schmutz/src/internal/shared/.
+// When changing one repo, change the other in the same PR. Go's internal/
+// rule prevents importing across modules, and the agent + controller
+// release cadences differ enough that pinning to a shared module would
+// create more pain than copy-paste maintenance. Promote to a shared
+// module the moment we have a third consumer or the first version-skew
+// bug.
 //
-// COMPLIANCE FOLLOW-UP (documented, not yet implemented): for finer-grained
-// ACLs (e.g. operator can read .binds but not .routes), this single record
-// will be split into sibling keys at the deployment path:
+// SUBSTRATE — COMPLIANCE FOLLOW-UP (documented, not yet implemented):
+// for finer-grained ACLs (e.g. operator can read .binds but not .routes),
+// the single substrate record will be split into sibling keys at the
+// deployment path:
 //
 //	<namespace>/secret/apps/<app>/<deployment>/substrate.binds
 //	<namespace>/secret/apps/<app>/<deployment>/substrate.routes
 //	<namespace>/secret/apps/<app>/<deployment>/substrate.posture
 //
-// Migration path: the Spec.Version field. v1 = single-record. v2 = sibling
-// keys. Readers branch on Version.
-//
-// CROSS-REPO CONTRACT: this struct is duplicated in kore/schmutz at the
-// same internal/substrate path. They MUST match field-for-field. When you
-// change one, change the other in the same PR. CI should diff the two
-// files and fail if they drift.
-//
-// Why duplicated rather than shared module: Go's internal/ rule prevents
-// importing across modules, and the agent + controller release cadences
-// differ enough that pinning to a shared module would create more pain
-// than copy-paste maintenance. We promote to a shared module the moment
-// we have a third consumer or the first version-skew bug.
-package substrate
+// Migration path: the Substrate.Version field. v1 = single-record. v2 =
+// sibling keys. Readers branch on Version.
+package shared
 
 import (
 	"errors"
@@ -43,14 +40,16 @@ import (
 	"strings"
 )
 
-// SchemaVersion is the wire-format version. Bump when any field meaning
-// changes; readers should refuse Spec.Version they don't understand.
-const SchemaVersion = 1
+// SubstrateSchemaVersion is the wire-format version of Substrate. Bump
+// when any field meaning changes; readers should refuse versions they
+// don't understand.
+const SubstrateSchemaVersion = 1
 
-// Spec is the full substrate record for one (namespace, app, deployment).
-// Tenant + app + deployment are recorded redundantly in the spec body so
-// a leaked/exported substrate can be self-described without its Bao path.
-type Spec struct {
+// Substrate is the full substrate record for one (namespace, app,
+// deployment). Tenant + app + deployment are recorded redundantly in the
+// body so a leaked/exported substrate can be self-described without its
+// Bao path.
+type Substrate struct {
 	// Version pins the schema. Readers reject mismatched versions rather
 	// than silently misinterpreting fields.
 	Version int `json:"version" yaml:"version"`
@@ -168,12 +167,12 @@ var hostnamePattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+tan
 // Validate returns nil if s is internally consistent and within the
 // MVP's accepted shape. Errors are informative; an operator should be
 // able to fix the spec from the message alone.
-func (s *Spec) Validate() error {
+func (s *Substrate) Validate() error {
 	if s == nil {
 		return errors.New("substrate: nil spec")
 	}
-	if s.Version != SchemaVersion {
-		return fmt.Errorf("substrate: unsupported version %d (this build expects %d)", s.Version, SchemaVersion)
+	if s.Version != SubstrateSchemaVersion {
+		return fmt.Errorf("substrate: unsupported version %d (this build expects %d)", s.Version, SubstrateSchemaVersion)
 	}
 	if !slugPattern.MatchString(s.Tenant) {
 		return fmt.Errorf("substrate: tenant %q is not a valid slug", s.Tenant)
@@ -279,12 +278,12 @@ func (p *Posture) Validate() error {
 	return nil
 }
 
-// MatchesPath returns nil if the spec's identity fields match the Bao
-// path it was loaded from. Used to detect misplaced substrate records.
+// MatchesPath returns nil if the substrate's identity fields match the
+// Bao path it was loaded from. Used to detect misplaced records.
 //
 // expectedTenant/expectedApp/expectedDeployment come from the path the
-// reader actually fetched, not from the spec body.
-func (s *Spec) MatchesPath(expectedTenant, expectedApp, expectedDeployment string) error {
+// reader actually fetched, not from the body.
+func (s *Substrate) MatchesPath(expectedTenant, expectedApp, expectedDeployment string) error {
 	if s.Tenant != expectedTenant {
 		return fmt.Errorf("substrate: tenant %q in body doesn't match path %q", s.Tenant, expectedTenant)
 	}
