@@ -48,6 +48,8 @@ func main() {
 		updateCmd(),
 		versionCmd(),
 		discoverCmd(),
+		baoEnrollCmd(),
+		baoLoginCmd(),
 	)
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
