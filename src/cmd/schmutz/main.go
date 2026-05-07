@@ -69,27 +69,51 @@ func enrollCmd() *cobra.Command {
 	var invitee string
 	var lat float64
 	var long float64
+
+	// Hub path flags — when --token is provided the hub enrollment
+	// path is used instead of the legacy WebSocket (schmutz-controller) path.
+	var token string
+	var tenant string
+	var app string
+	var deployment string
+	var agentJSON string
+
 	cmd := &cobra.Command{
 		Use:   "enroll",
 		Short: "Register this device and enroll its Ziti identity",
 		Long: `Enroll this machine into the Kontango zero-trust network.
 
-This command must run as root — full hardware fingerprinting requires privileged
-access to disk serials, SSH host keys, and DMI data. Without root the identity
-fingerprint is too weak to survive re-enrollment verification.
+Hub path (recommended — requires operator-issued enrollment token):
 
-A private key is generated ON THIS MACHINE and never transmitted. Only a
-certificate signing request (CSR) is sent to the controller. The Ziti CA signs
-the CSR and returns only the certificate — your private key stays here.
+  schmutz enroll \
+    --controller https://join.kontango.net \
+    --token enroll-XXXX \
+    --tenant kontango --app inventree --deployment prod-02
 
-By enrolling you accept the Kontango Terms of Service: https://kontango.net/terms`,
+  The operator issues the token via POST /api/v1/enrollments.
+  A single HTTP call to the hub over :443 ALPN returns both the Ziti
+  identity and the Bao bundle. No WebSocket, no second connection.
+
+Legacy path (schmutz-controller, kept for backward compatibility):
+
+  schmutz enroll --controller https://join.kontango.net
+
+  Uses the WebSocket enrollment flow. Active until schmutz-controller
+  is fully replaced by the hub.
+
+This command must run as root — full hardware fingerprinting requires
+privileged access to disk serials, SSH host keys, and DMI data.
+
+A private key is generated ON THIS MACHINE and never transmitted.
+Only a certificate signing request (CSR) is sent to the controller.
+
+By enrolling you accept the Terms of Service: https://kontango.net/terms`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if enroll.IsControllerNode() {
 				return fmt.Errorf("schmutz: this machine is a Ziti controller node — schmutz agent must not run here")
 			}
 
 			// T&C gate — must be accepted before any network call is made.
-			// --yes bypasses the interactive prompt (for PXE/hook/scripted installs).
 			termsAccepted := yes
 			if !termsAccepted {
 				termsAccepted = promptTerms()
@@ -126,20 +150,57 @@ By enrolling you accept the Kontango Terms of Service: https://kontango.net/term
 				os.Remove(identityPath)
 			}
 
+			// ---- Hub path ----
+			if token != "" {
+				if tenant == "" || app == "" || deployment == "" {
+					return fmt.Errorf("schmutz: --tenant, --app, --deployment required with --token")
+				}
+				if agentJSON == "" {
+					agentJSON = filepath.Join(schmutzDir, "agent.json")
+				}
+				info := collectDeviceInfo()
+				log.Printf("schmutz: hub enroll → %s (tenant=%s app=%s deployment=%s)",
+					r.ControllerURL(), tenant, app, deployment)
+				result, err := enroll.RegisterHub(cmd.Context(), enroll.HubEnrollConfig{
+					ControllerURL: r.ControllerURL(),
+					Token:         token,
+					Tenant:        tenant,
+					App:           app,
+					Deployment:    deployment,
+					Flavor:        profile,
+					IdentityPath:  identityPath,
+					AgentJSONPath: agentJSON,
+					Hardware: map[string]interface{}{
+						"hostname":    info.Hostname,
+						"os":          info.OS,
+						"arch":        info.Arch,
+						"platform":    info.Platform,
+						"fingerprint": info.Fingerprint,
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("enroll: %w", err)
+				}
+				if err := r.SetSlug(result.ZitiIdentityName); err != nil {
+					log.Printf("schmutz: warn: could not persist slug: %v", err)
+				}
+				log.Printf("schmutz: enrolled via hub (identity=%s)", result.ZitiIdentityName)
+				log.Printf("schmutz: identity written to %s", result.IdentityPath)
+				log.Printf("schmutz: bao config written to %s", result.AgentJSONPath)
+				log.Printf("schmutz: run 'schmutz start' to bind services and begin bao-token refresh")
+				return nil
+			}
+
+			// ---- Legacy WebSocket path (schmutz-controller) ----
 			info := collectDeviceInfo()
 			info.Profile = profile
-
-			log.Printf("schmutz: enrolling with %s (fingerprint=%s platform=%s)",
+			log.Printf("schmutz: legacy enroll with %s (fingerprint=%s platform=%s)",
 				r.ControllerURL(), info.Fingerprint, info.Platform)
-
-			// RegisterWS generates the key pair here, POSTs /api/v1/start (port 443,
-			// Caddy-fronted, impossible to port-block), upgrades to wss:// for the
-			// enrollment WS, then injects the local private key into the returned JSON.
-			result, err := enroll.RegisterWS(cmd.Context(), enroll.WSEnrollConfig{
+			wsResult, err := enroll.RegisterWS(cmd.Context(), enroll.WSEnrollConfig{
 				ControllerURL: r.ControllerURL(),
 				IdentityPath:  identityPath,
 				Info:          info,
-				TermsAccepted: true, // validated above
+				TermsAccepted: true,
 				AgentVersion:  Version,
 				Profile:       profile,
 				Tags:          map[string]string{"install_mode": "interactive"},
@@ -151,21 +212,19 @@ By enrolling you accept the Kontango Terms of Service: https://kontango.net/term
 			if err != nil {
 				return fmt.Errorf("enroll: %w", err)
 			}
-
-			// Use the slug from the --slug flag; the WS flow doesn't return one.
 			effectiveSlug := slug
 			if effectiveSlug == "" {
-				effectiveSlug = result.Slug
+				effectiveSlug = wsResult.Slug
 			}
 			if err := r.SetSlug(effectiveSlug); err != nil {
 				log.Printf("schmutz: warn: could not persist slug: %v", err)
 			}
-			if err := r.SetServices(result.Services); err != nil {
+			if err := r.SetServices(wsResult.Services); err != nil {
 				log.Printf("schmutz: warn: could not persist services: %v", err)
 			}
-			log.Printf("schmutz: enrolled (status=%s)", result.Status)
+			log.Printf("schmutz: enrolled (status=%s)", wsResult.Status)
 			log.Printf("schmutz: identity written to %s", identityPath)
-			if result.Status == "quarantine" {
+			if wsResult.Status == "quarantine" {
 				log.Printf("schmutz: pending operator approval — run 'schmutz start' now; access expands when approved")
 			} else {
 				log.Printf("schmutz: run 'schmutz start' to bind services")
@@ -173,15 +232,26 @@ By enrolling you accept the Kontango Terms of Service: https://kontango.net/term
 			return nil
 		},
 	}
+	// Common flags
 	cmd.Flags().StringVar(&controllerURL, "controller", "",
-		"TangoKore controller URL (required on first install, e.g. https://join.kontango.net)")
+		"hub or legacy controller URL (e.g. https://join.kontango.net or http://ziti-base.tango:8765)")
 	cmd.Flags().BoolVar(&force, "force", false, "re-enroll even if identity already exists")
-	cmd.Flags().StringVar(&profile, "profile", "server", "device profile (e.g. server, laptop, workstation)")
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "accept Terms of Service non-interactively (required for PXE/hook/scripted installs)")
-	cmd.Flags().StringVar(&slug, "slug", "", "human-readable name for this machine (e.g. web-1, gpu-box) — stored permanently in the Ziti identity")
-	cmd.Flags().StringVar(&invitee, "invitee", "", "who invited this machine — email or username of the operator vouching for it")
-	cmd.Flags().Float64Var(&lat, "lat", 0, "approximate latitude at enroll time (optional, stored in identity)")
-	cmd.Flags().Float64Var(&long, "long", 0, "approximate longitude at enroll time (optional, stored in identity)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "accept Terms of Service non-interactively")
+
+	// Hub path flags
+	cmd.Flags().StringVar(&token, "token", "",
+		"enrollment token from POST /api/v1/enrollments (hub path). When set, --tenant --app --deployment are required.")
+	cmd.Flags().StringVar(&tenant, "tenant", "", "tenant slug, e.g. kontango (hub path)")
+	cmd.Flags().StringVar(&app, "app", "", "application slug, e.g. inventree (hub path)")
+	cmd.Flags().StringVar(&deployment, "deployment", "", "deployment slug, e.g. prod-02 (hub path)")
+	cmd.Flags().StringVar(&agentJSON, "agent-json", "", "where to write bao agent config (default: /etc/schmutz/agent.json)")
+
+	// Legacy WebSocket path flags
+	cmd.Flags().StringVar(&profile, "profile", "server", "device profile for legacy path (e.g. server, laptop)")
+	cmd.Flags().StringVar(&slug, "slug", "", "human-readable name (legacy path)")
+	cmd.Flags().StringVar(&invitee, "invitee", "", "operator vouching for this machine (legacy path)")
+	cmd.Flags().Float64Var(&lat, "lat", 0, "latitude at enroll time (legacy path)")
+	cmd.Flags().Float64Var(&long, "long", 0, "longitude at enroll time (legacy path)")
 	return cmd
 }
 
