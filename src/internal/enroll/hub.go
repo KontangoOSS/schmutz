@@ -187,10 +187,12 @@ func RegisterHub(ctx context.Context, cfg HubEnrollConfig) (*HubEnrollResult, er
 		return nil, fmt.Errorf("enroll/hub: response missing bao bundle fields")
 	}
 
-	// 2. Exchange the Ziti enrollment JWT for a local identity file.
-	// EnrollJWT is the existing function from enroll.go — reused unchanged.
-	if err := EnrollJWT(claimResp.ZitiIdentity.IdentityJSON, cfg.IdentityPath); err != nil {
-		return nil, fmt.Errorf("enroll/hub: ziti enrollment: %w", err)
+	// 2. Write the identity JSON the hub already enrolled server-side.
+	//    The hub calls EnrollJWT on the controller node (where port 6262
+	//    is reachable), so the agent receives a complete identity file and
+	//    never needs to reach the Ziti enrollment port directly.
+	if err := WriteIdentity([]byte(claimResp.ZitiIdentity.IdentityJSON), cfg.IdentityPath); err != nil {
+		return nil, fmt.Errorf("enroll/hub: write identity: %w", err)
 	}
 
 	// 3. Persist the Bao bundle as /etc/schmutz/agent.json so the
