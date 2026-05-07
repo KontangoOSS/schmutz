@@ -207,6 +207,53 @@ func TestMatchesPath_Mismatch(t *testing.T) {
 	}
 }
 
+// EffectiveBinds: base SSH bind always prepended unless IncludeBase=false.
+func TestEffectiveBinds_PrependSSH(t *testing.T) {
+	s := validInventreeSpec()
+	s.Deployment = "prod-01"
+	s.Binds = []Bind{
+		{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000", Proto: "tcp"},
+	}
+	binds := s.EffectiveBinds()
+	if len(binds) != 2 {
+		t.Fatalf("expected 2 binds (SSH + inventree), got %d", len(binds))
+	}
+	if binds[0].Service != "ssh-prod-01.tango" {
+		t.Errorf("first bind should be SSH, got %q", binds[0].Service)
+	}
+	if binds[1].Service != "inventree.tango" {
+		t.Errorf("second bind should be inventree, got %q", binds[1].Service)
+	}
+}
+
+func TestEffectiveBinds_NoBaseWhenExplicitFalse(t *testing.T) {
+	f := false
+	s := validInventreeSpec()
+	s.IncludeBase = &f
+	s.Binds = []Bind{{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000"}}
+	binds := s.EffectiveBinds()
+	if len(binds) != 1 || binds[0].Service != "inventree.tango" {
+		t.Errorf("expected only declared bind when IncludeBase=false, got %v", binds)
+	}
+}
+
+func TestEffectiveBinds_NoSSHDuplication(t *testing.T) {
+	s := validInventreeSpec()
+	s.Deployment = "prod-01"
+	// Operator explicitly declared SSH at a custom port
+	s.Binds = []Bind{
+		{Service: "ssh-prod-01.tango", LocalAddr: "127.0.0.1:2222", Proto: "tcp"},
+		{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000"},
+	}
+	binds := s.EffectiveBinds()
+	if len(binds) != 2 {
+		t.Errorf("operator SSH bind should not be duplicated, got %d binds", len(binds))
+	}
+	if binds[0].LocalAddr != "127.0.0.1:2222" {
+		t.Errorf("operator SSH bind should be preserved: %q", binds[0].LocalAddr)
+	}
+}
+
 // Sanity: the konmail example we'd write in the operator runbook also
 // validates. Catches regressions where we accidentally bake inventree
 // assumptions into the schema.

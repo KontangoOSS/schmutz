@@ -77,8 +77,16 @@ type Substrate struct {
 	// identity matches before applying. Mismatch = misplaced substrate.
 	ZitiIdentity string `json:"ziti_identity" yaml:"ziti_identity"`
 
-	// Binds: overlay services this host binds, mapping each to a local
-	// port. Order is informative; reconciler may apply in any order.
+	// IncludeBase: when true, the agent prepends the base Layer 1 binds
+	// (ssh-<hostname>.tango → :22) before the declared Binds. This saves
+	// every app blueprint from repeating the SSH bind explicitly. Defaults
+	// to true; set to false only for special cases (e.g. an SSH-less
+	// container or a machine where SSH is on a non-standard port).
+	IncludeBase *bool `json:"include_base,omitempty" yaml:"include_base,omitempty"`
+
+	// Binds: overlay services this host binds beyond the base layer.
+	// The SSH bind is always prepended unless IncludeBase is false.
+	// Order is informative; reconciler may apply in any order.
 	Binds []Bind `json:"binds" yaml:"binds"`
 
 	// Routes (optional): HTTP/L7 routes the local Caddy should expose,
@@ -147,6 +155,35 @@ type Posture struct {
 type FileCheck struct {
 	Path   string `json:"path" yaml:"path"`
 	Sha512 string `json:"sha512,omitempty" yaml:"sha512,omitempty"`
+}
+
+// EffectiveBinds returns the full bind list the agent should apply:
+// Layer 1 (base SSH bind) followed by the declared app-specific binds.
+// When IncludeBase is explicitly false, only the declared binds are returned.
+//
+// The SSH service name follows the convention ssh-<hostname>.tango where
+// hostname is derived from the deployment slug. Callers that need to override
+// the SSH bind (non-standard port, different hostname) should set IncludeBase
+// to false and include their own SSH bind in Binds.
+func (s *Substrate) EffectiveBinds() []Bind {
+	if s.IncludeBase != nil && !*s.IncludeBase {
+		return s.Binds
+	}
+	// Layer 1: SSH is always first — it's the baseline admin access path.
+	// Service name: ssh-<deployment>.tango (e.g. ssh-prod-01.tango for a
+	// deployment named prod-01, ssh-ref-ctrl-1.tango for ref-ctrl-1).
+	sshBind := Bind{
+		Service:   "ssh-" + s.Deployment + ".tango",
+		LocalAddr: "127.0.0.1:22",
+		Proto:     "tcp",
+	}
+	// Avoid duplicating the SSH bind if the operator already declared it.
+	for _, b := range s.Binds {
+		if b.Service == sshBind.Service {
+			return s.Binds // operator's bind takes precedence
+		}
+	}
+	return append([]Bind{sshBind}, s.Binds...)
 }
 
 // ----- validation -----
