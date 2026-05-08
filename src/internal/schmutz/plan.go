@@ -16,6 +16,10 @@ import (
 // be able to read the log line and know exactly what the agent thinks
 // it should be doing without cross-referencing Bao.
 func planLog(s *shared.Schmutz) string {
+	return planLogWithZone(s, "")
+}
+
+func planLogWithZone(s *shared.Schmutz, zone string) string {
 	if s == nil {
 		return "substrate: plan: <nil>"
 	}
@@ -23,20 +27,19 @@ func planLog(s *shared.Schmutz) string {
 	fmt.Fprintf(&b, "substrate: plan for %s/%s/%s (ziti=%s):\n",
 		s.Tenant, s.App, s.Deployment, s.ZitiIdentity)
 
-	// Binds
-	if len(s.Binds) == 0 {
+	// Use EffectiveBinds so the implicit SSH bind is always shown.
+	binds := s.EffectiveBinds(zone)
+	if len(binds) == 0 {
 		fmt.Fprintln(&b, "  binds:   (none)")
 	} else {
-		fmt.Fprintf(&b, "  binds:   %d service(s)\n", len(s.Binds))
-		// Compute padding so columns line up. service is the longest
-		// thing typically; pad to its max + 1.
+		fmt.Fprintf(&b, "  binds:   %d service(s)\n", len(binds))
 		maxSvc := 0
-		for _, bind := range s.Binds {
+		for _, bind := range binds {
 			if len(bind.Service) > maxSvc {
 				maxSvc = len(bind.Service)
 			}
 		}
-		for _, bind := range s.Binds {
+		for _, bind := range binds {
 			proto := bind.Proto
 			if proto == "" {
 				proto = "tcp"
@@ -88,8 +91,22 @@ func planLog(s *shared.Schmutz) string {
 		}
 	}
 
+	// Dependencies
+	if len(s.Dependencies) > 0 {
+		fmt.Fprintf(&b, "  deps:    %d declared\n", len(s.Dependencies))
+		for _, d := range s.Dependencies {
+			opt := ""
+			if d.Optional {
+				opt = " (optional)"
+			}
+			ref := d.Ref
+			if d.Version != "" {
+				ref += "@" + d.Version
+			}
+			fmt.Fprintf(&b, "    - [%s] %s%s\n", d.Kind, ref, opt)
+		}
+	}
+
 	fmt.Fprintln(&b, "  >> NO ACTIONS TAKEN (read-only mode)")
-	// Trim the final newline so the log line doesn't print a blank line
-	// after; log.Logger adds its own.
 	return strings.TrimRight(b.String(), "\n")
 }

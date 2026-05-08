@@ -214,7 +214,7 @@ func TestEffectiveBinds_PrependSSH(t *testing.T) {
 	s.Binds = []Bind{
 		{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000", Proto: "tcp"},
 	}
-	binds := s.EffectiveBinds()
+	binds := s.EffectiveBinds("")
 	if len(binds) != 2 {
 		t.Fatalf("expected 2 binds (SSH + inventree), got %d", len(binds))
 	}
@@ -231,7 +231,7 @@ func TestEffectiveBinds_NoBaseWhenExplicitFalse(t *testing.T) {
 	s := validInventreeSpec()
 	s.IncludeBase = &f
 	s.Binds = []Bind{{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000"}}
-	binds := s.EffectiveBinds()
+	binds := s.EffectiveBinds("")
 	if len(binds) != 1 || binds[0].Service != "inventree.tango" {
 		t.Errorf("expected only declared bind when IncludeBase=false, got %v", binds)
 	}
@@ -245,7 +245,7 @@ func TestEffectiveBinds_NoSSHDuplication(t *testing.T) {
 		{Service: "ssh-prod-01.tango", LocalAddr: "127.0.0.1:2222", Proto: "tcp"},
 		{Service: "inventree.tango", LocalAddr: "127.0.0.1:8000"},
 	}
-	binds := s.EffectiveBinds()
+	binds := s.EffectiveBinds("")
 	if len(binds) != 2 {
 		t.Errorf("operator SSH bind should not be duplicated, got %d binds", len(binds))
 	}

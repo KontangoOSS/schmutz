@@ -100,6 +100,12 @@ type Schmutz struct {
 	// attached to dial policies. The fields here mirror the same names
 	// for operator clarity.
 	Posture *Posture `json:"posture,omitempty" yaml:"posture,omitempty"`
+
+	// Dependencies declares external resources this deployment requires.
+	// The agent can fetch/validate these at startup (SDKs, repos, images).
+	// All dependency kinds are additive — the app still works without them
+	// at the schmutz level; they're hints for lifecycle tooling.
+	Dependencies []Dependency `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
 }
 
 // Bind declares one overlay service this host binds.
@@ -156,30 +162,59 @@ type FileCheck struct {
 	Sha512 string `json:"sha512,omitempty" yaml:"sha512,omitempty"`
 }
 
+// Dependency declares an external resource this deployment depends on.
+// Kind determines how the agent (or lifecycle tooling) resolves it.
+//
+//	forgejo_repo    — a Forgejo repo the app reads (plugins, configs, catalog data)
+//	container_image — a container image the app pulls (explicit version pin)
+//	sdk             — a language SDK or runtime package
+//	service         — a named Ziti overlay service this app dials
+//	secret          — a Bao secret path this app reads (documents cross-app deps)
+//
+// Ref is the canonical reference for the kind:
+//
+//	forgejo_repo:    "public/inventree-plugin" or "http://git.tango/org/repo"
+//	container_image: "ghcr.io/inventree/inventree:0.16.4"
+//	sdk:             "go@1.22" / "python@3.12" / "node@20"
+//	service:         "inventree.tango" (overlay service name)
+//	secret:          "kontango/secret/apps/inventree/prod-01/api-key"
+//
+// Optional is true for nice-to-haves; false (default) means the agent
+// should warn loudly if the dependency cannot be verified.
+type Dependency struct {
+	Kind     string `json:"kind" yaml:"kind"`
+	Ref      string `json:"ref" yaml:"ref"`
+	Version  string `json:"version,omitempty" yaml:"version,omitempty"`
+	Optional bool   `json:"optional,omitempty" yaml:"optional,omitempty"`
+	Note     string `json:"note,omitempty" yaml:"note,omitempty"`
+}
+
 // EffectiveBinds returns the full bind list the agent should apply:
 // Layer 1 (base SSH bind) followed by the declared app-specific binds.
 // When IncludeBase is explicitly false, only the declared binds are returned.
 //
-// The SSH service name follows the convention ssh-<hostname>.tango where
-// hostname is derived from the deployment slug. Callers that need to override
-// the SSH bind (non-standard port, different hostname) should set IncludeBase
-// to false and include their own SSH bind in Binds.
-func (s *Schmutz) EffectiveBinds() []Bind {
+// zone is the overlay TLD (e.g. "tango"). Pass "" to use the default "tango".
+// The SSH service name is ssh-<deployment>.<zone>.
+//
+// Callers that need to override the SSH bind (non-standard port, different
+// hostname) should set IncludeBase to false and declare their own SSH bind.
+func (s *Schmutz) EffectiveBinds(zone string) []Bind {
+	if zone == "" {
+		zone = "tango"
+	}
 	if s.IncludeBase != nil && !*s.IncludeBase {
 		return s.Binds
 	}
-	// Layer 1: SSH is always first — it's the baseline admin access path.
-	// Service name: ssh-<deployment>.tango (e.g. ssh-prod-01.tango for a
-	// deployment named prod-01, ssh-ref-ctrl-1.tango for ref-ctrl-1).
+	sshService := "ssh-" + s.Deployment + "." + zone
 	sshBind := Bind{
-		Service:   "ssh-" + s.Deployment + ".tango",
+		Service:   sshService,
 		LocalAddr: "127.0.0.1:22",
 		Proto:     "tcp",
 	}
-	// Avoid duplicating the SSH bind if the operator already declared it.
+	// Avoid duplicating if the operator already declared the SSH bind.
 	for _, b := range s.Binds {
 		if b.Service == sshBind.Service {
-			return s.Binds // operator's bind takes precedence
+			return s.Binds
 		}
 	}
 	return append([]Bind{sshBind}, s.Binds...)
