@@ -133,7 +133,9 @@ func (h *ZitiHost) Stop() {
 		for _, l := range h.listeners {
 			l.Close()
 		}
-		h.ctx.Close()
+		if h.ctx != nil {
+			h.ctx.Close()
+		}
 	})
 	h.wg.Wait()
 }
