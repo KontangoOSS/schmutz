@@ -1,6 +1,6 @@
 package shared
 
-// Blueprint is the per-application catalog record stored at
+// Tango is the per-application catalog record stored at
 //   public/<app>/blueprint.json
 //
 // Canonical schema source: kore/kustodian/openbao/docs/guides/catalog.md
@@ -21,41 +21,41 @@ import (
 	"strings"
 )
 
-// BlueprintSchemaVersion is the wire-format version. Bump when field
+// TangoSchemaVersion is the wire-format version. Bump when field
 // meaning changes in a backward-incompatible way.
-const BlueprintSchemaVersion = 2
+const TangoSchemaVersion = 2
 
-// Blueprint is the structured catalog record for one application.
+// Tango is the structured catalog record for one application.
 // Fields are grouped by concern to make authoring easier and to
 // allow arrays where the old KV format required CSV strings.
-type Blueprint struct {
+type Tango struct {
 	// --- top-level identity ---
 	AppID  string `json:"app_id"`
 	UUID   string `json:"uuid"`
 	Schema int    `json:"schema_version,omitempty"`
 
 	// Identity groups human-readable metadata.
-	Identity BlueprintIdentity `json:"identity"`
+	Identity TangoIdentity `json:"identity"`
 
 	// Links groups all external URLs.
-	Links BlueprintLinks `json:"links"`
+	Links TangoLinks `json:"links"`
 
 	// Sizing declares resource tier constraints using short tier slugs
 	// (e.g. "tg-md-1"). Resolved via catalog config path roots.
-	Sizing BlueprintSizing `json:"sizing"`
+	Sizing TangoSizing `json:"sizing"`
 
 	// Deployment declares platform and OS compatibility.
-	Deployment BlueprintDeployment `json:"deployment"`
+	Deployment TangoDeployment `json:"deployment"`
 
 	// Runtime declares the operational contract: secrets, health, ports.
-	Runtime BlueprintRuntime `json:"runtime"`
+	Runtime TangoRuntime `json:"runtime"`
 
 	// Catalog holds publishing metadata (when added, who maintains, active flag).
-	Catalog BlueprintCatalog `json:"catalog"`
+	Catalog TangoCatalog `json:"catalog"`
 }
 
-// BlueprintIdentity holds human-readable metadata.
-type BlueprintIdentity struct {
+// TangoIdentity holds human-readable metadata.
+type TangoIdentity struct {
 	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	// Category short slug, e.g. "operations". Resolved to public/categories/<slug>.
@@ -64,8 +64,8 @@ type BlueprintIdentity struct {
 	License string `json:"license,omitempty"`
 }
 
-// BlueprintLinks groups all external URLs.
-type BlueprintLinks struct {
+// TangoLinks groups all external URLs.
+type TangoLinks struct {
 	GitHub   string `json:"github,omitempty"`
 	Forgejo  string `json:"forgejo,omitempty"`
 	Upstream string `json:"upstream,omitempty"`
@@ -75,16 +75,16 @@ type BlueprintLinks struct {
 	Plugin   string `json:"plugin,omitempty"`
 }
 
-// BlueprintSizing declares resource tier constraints.
+// TangoSizing declares resource tier constraints.
 // Slugs resolve via catalog config: "tg-md-1" → "public/sizing/tg-md-1".
-type BlueprintSizing struct {
+type TangoSizing struct {
 	Min         string `json:"min"`
 	Recommended string `json:"recommended"`
 	Max         string `json:"max"`
 }
 
-// BlueprintDeployment declares where and how this app can be deployed.
-type BlueprintDeployment struct {
+// TangoDeployment declares where and how this app can be deployed.
+type TangoDeployment struct {
 	// DefaultOS short slug, e.g. "ubuntu-24.04".
 	DefaultOS string `json:"default_os,omitempty"`
 	// DefaultPlatform short slug, e.g. "proxmox/lxc/medium".
@@ -97,8 +97,8 @@ type BlueprintDeployment struct {
 	DockerSupported bool `json:"docker_supported,omitempty"`
 }
 
-// BlueprintRuntime declares the operational contract.
-type BlueprintRuntime struct {
+// TangoRuntime declares the operational contract.
+type TangoRuntime struct {
 	// BaoSecretsPath is the path template for this app's secrets.
 	// {deployment} is interpolated at enrollment time.
 	// e.g. "kontango/secret/apps/ticketarr/{deployment}"
@@ -110,17 +110,17 @@ type BlueprintRuntime struct {
 	SecretRequirements []SecretRequirement `json:"secret_requirements,omitempty"`
 
 	// Health is the liveness check for this app.
-	Health BlueprintHealth `json:"health,omitempty"`
+	Health TangoHealth `json:"health,omitempty"`
 }
 
-// BlueprintHealth describes how to probe this app's liveness.
-type BlueprintHealth struct {
+// TangoHealth describes how to probe this app's liveness.
+type TangoHealth struct {
 	URL            string `json:"url,omitempty"`
 	ExpectStatus   int    `json:"expect_status,omitempty"`
 }
 
-// BlueprintCatalog holds publishing metadata.
-type BlueprintCatalog struct {
+// TangoCatalog holds publishing metadata.
+type TangoCatalog struct {
 	Added           string `json:"added"`                      // YYYY-MM-DD
 	Maintainer      string `json:"maintainer"`
 	Active          bool   `json:"active"`
@@ -138,7 +138,7 @@ var datePattern = regexp.MustCompile(`^\d{4}-\d{2}(-\d{2})?$`)
 
 // Validate returns nil if the blueprint is internally consistent.
 // Active blueprints are held to stricter requirements than discovery entries.
-func (b *Blueprint) Validate() error {
+func (b *Tango) Validate() error {
 	if b == nil {
 		return errors.New("blueprint: nil")
 	}
@@ -213,25 +213,25 @@ func ResolveTier(slug, root string) string {
 
 
 // MarshalJSON produces the canonical blueprint.json representation.
-func (b *Blueprint) MarshalJSON() ([]byte, error) {
-	type Alias Blueprint
-	b.Schema = BlueprintSchemaVersion
+func (b *Tango) MarshalJSON() ([]byte, error) {
+	type Alias Tango
+	b.Schema = TangoSchemaVersion
 	return json.Marshal((*Alias)(b))
 }
 
 // UnmarshalJSON reads a blueprint.json file.
-func (b *Blueprint) UnmarshalJSON(data []byte) error {
-	type Alias Blueprint
+func (b *Tango) UnmarshalJSON(data []byte) error {
+	type Alias Tango
 	var a Alias
 	if err := json.Unmarshal(data, &a); err != nil {
 		return err
 	}
-	*b = Blueprint(a)
+	*b = Tango(a)
 	return nil
 }
 
 // JSON returns the canonical JSON bytes for this blueprint.
-func (b *Blueprint) JSON() ([]byte, error) {
+func (b *Tango) JSON() ([]byte, error) {
 	return json.MarshalIndent(b, "", "  ")
 }
 

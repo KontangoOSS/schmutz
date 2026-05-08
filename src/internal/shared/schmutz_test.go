@@ -8,9 +8,9 @@ import (
 // validInventreeSpec returns the canonical example used across most tests.
 // Hand-written so a reader can immediately see what a real substrate looks
 // like; mirror what bao-app-enroll will produce.
-func validInventreeSpec() *Substrate {
-	return &Substrate{
-		Version:      SubstrateSchemaVersion,
+func validInventreeSpec() *Schmutz {
+	return &Schmutz{
+		Version:      SchmutzSchemaVersion,
 		Tenant:       "kontango",
 		App:          "inventree",
 		Deployment:   "prod-01",
@@ -51,15 +51,15 @@ func TestValidate_VersionMismatch(t *testing.T) {
 
 func TestValidate_BadSlugs(t *testing.T) {
 	cases := []struct {
-		mut  func(*Substrate)
+		mut  func(*Schmutz)
 		want string
 	}{
-		{func(s *Substrate) { s.Tenant = "Kontango" }, "tenant"},
-		{func(s *Substrate) { s.Tenant = "" }, "tenant"},
-		{func(s *Substrate) { s.App = "Inventree" }, "app"},
-		{func(s *Substrate) { s.App = "inv_entree" }, "app"}, // underscore not allowed
-		{func(s *Substrate) { s.Deployment = "-prod-01" }, "deployment"},
-		{func(s *Substrate) { s.Deployment = "prod-01-" }, "deployment"},
+		{func(s *Schmutz) { s.Tenant = "Kontango" }, "tenant"},
+		{func(s *Schmutz) { s.Tenant = "" }, "tenant"},
+		{func(s *Schmutz) { s.App = "Inventree" }, "app"},
+		{func(s *Schmutz) { s.App = "inv_entree" }, "app"}, // underscore not allowed
+		{func(s *Schmutz) { s.Deployment = "-prod-01" }, "deployment"},
+		{func(s *Schmutz) { s.Deployment = "prod-01-" }, "deployment"},
 	}
 	for _, c := range cases {
 		s := validInventreeSpec()
@@ -258,8 +258,8 @@ func TestEffectiveBinds_NoSSHDuplication(t *testing.T) {
 // validates. Catches regressions where we accidentally bake inventree
 // assumptions into the schema.
 func TestValidate_KonmailExample(t *testing.T) {
-	s := &Substrate{
-		Version:      SubstrateSchemaVersion,
+	s := &Schmutz{
+		Version:      SchmutzSchemaVersion,
 		Tenant:       "kontango",
 		App:          "konmail",
 		Deployment:   "prod-01",

@@ -17,7 +17,7 @@ import (
 	"github.com/KontangoOSS/schmutz/internal/discover"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
 	"github.com/KontangoOSS/schmutz/internal/join"
-	"github.com/KontangoOSS/schmutz/internal/substrate"
+	"github.com/KontangoOSS/schmutz/internal/schmutz"
 	"github.com/KontangoOSS/schmutz/internal/telemetry"
 	"github.com/KontangoOSS/schmutz/root"
 	"github.com/spf13/cobra"
@@ -387,7 +387,7 @@ T&C is considered accepted at install time when running via systemd.`,
 				}
 			}()
 
-			// Substrate watcher: reads <tenant>/secret/data/apps/<app>/<deployment>/substrate
+			// Schmutz watcher: reads <tenant>/secret/data/apps/<app>/<deployment>/substrate
 			// every 24h, parses + validates, logs the reconciliation plan.
 			// v1 takes NO actions on the host — the reconciler that
 			// applies the plan to ziti-edge-tunnel + Caddy is a separate

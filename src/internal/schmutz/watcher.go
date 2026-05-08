@@ -57,7 +57,7 @@ type Watcher struct {
 	cfg    WatcherConfig
 	logger *log.Logger
 
-	lastSpec    atomic.Pointer[shared.Substrate]
+	lastSpec    atomic.Pointer[shared.Schmutz]
 	lastErr     atomic.Pointer[error]
 	lastAttempt atomic.Int64
 }
@@ -191,7 +191,7 @@ func (w *Watcher) tick(ctx context.Context) {
 
 // LastSpec returns the most recently parsed substrate, or nil if no
 // successful poll has happened yet.
-func (w *Watcher) LastSpec() *shared.Substrate { return w.lastSpec.Load() }
+func (w *Watcher) LastSpec() *shared.Schmutz { return w.lastSpec.Load() }
 
 // LastError returns the most recent error, or nil if the last attempt
 // succeeded. Always reflects the most recent tick.
@@ -207,7 +207,7 @@ func (w *Watcher) LastError() error {
 // none yet.
 func (w *Watcher) LastAttempt() int64 { return w.lastAttempt.Load() }
 
-func (w *Watcher) recordOK(spec *shared.Substrate) {
+func (w *Watcher) recordOK(spec *shared.Schmutz) {
 	w.lastSpec.Store(spec)
 	w.lastErr.Store(nil)
 }
@@ -241,15 +241,15 @@ func loadAgent(path string) (*agentSummary, error) {
 }
 
 // decodeSubstrate converts the KV map (string keys, untyped values) into
-// a typed shared.Substrate. We round-trip via JSON so the existing
+// a typed shared.Schmutz. We round-trip via JSON so the existing
 // json/yaml tags on the struct do the work — Bao gives us
 // `map[string]any` where nested arrays/maps are already typed.
-func decodeSubstrate(kv map[string]any) (*shared.Substrate, error) {
+func decodeSubstrate(kv map[string]any) (*shared.Schmutz, error) {
 	body, err := json.Marshal(kv)
 	if err != nil {
 		return nil, fmt.Errorf("re-marshal kv: %w", err)
 	}
-	var spec shared.Substrate
+	var spec shared.Schmutz
 	if err := json.Unmarshal(body, &spec); err != nil {
 		return nil, fmt.Errorf("unmarshal substrate: %w", err)
 	}
@@ -257,7 +257,7 @@ func decodeSubstrate(kv map[string]any) (*shared.Substrate, error) {
 		// Tolerate v1 records written before the schema added an
 		// explicit Version. Bao-app-enroll always writes Version=1
 		// today, so this branch is purely defensive.
-		spec.Version = shared.SubstrateSchemaVersion
+		spec.Version = shared.SchmutzSchemaVersion
 	}
 	return &spec, nil
 }

@@ -427,9 +427,9 @@ func waitFor(t *testing.T, max time.Duration, cond func() bool) bool {
 }
 
 // decodeSubstrate is reused by the watcher; verify it round-trips
-// shared.Substrate too (sanity check that JSON tags match).
+// shared.Schmutz too (sanity check that JSON tags match).
 func TestDecodeSubstrate_RoundTrip(t *testing.T) {
-	in := &shared.Substrate{
+	in := &shared.Schmutz{
 		Version: 1, Tenant: "x", App: "y", Deployment: "z",
 		ZitiIdentity: "machine-12345678",
 		Binds: []shared.Bind{

@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/internal/substrate"
+	"github.com/KontangoOSS/schmutz/internal/schmutz"
 	"github.com/spf13/cobra"
 )
 

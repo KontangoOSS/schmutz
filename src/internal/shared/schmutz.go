@@ -2,7 +2,7 @@
 // agent, future tooling) reads or writes. One package per system, two
 // types currently:
 //
-//   - Substrate (this file): per-deployment host configuration written
+//   - Schmutz (this file): per-deployment host configuration written
 //     by the controller, read by the agent. Stored at
 //     <namespace>/secret/apps/<app>/<deployment>/substrate.
 //
@@ -28,7 +28,7 @@
 //	<namespace>/secret/apps/<app>/<deployment>/substrate.routes
 //	<namespace>/secret/apps/<app>/<deployment>/substrate.posture
 //
-// Migration path: the Substrate.Version field. v1 = single-record. v2 =
+// Migration path: the Schmutz.Version field. v1 = single-record. v2 =
 // sibling keys. Readers branch on Version.
 package shared
 
@@ -39,16 +39,16 @@ import (
 	"strings"
 )
 
-// SubstrateSchemaVersion is the wire-format version of Substrate. Bump
+// SchmutzSchemaVersion is the wire-format version of Schmutz. Bump
 // when any field meaning changes; readers should refuse versions they
 // don't understand.
-const SubstrateSchemaVersion = 1
+const SchmutzSchemaVersion = 1
 
-// Substrate is the full substrate record for one (namespace, app,
+// Schmutz is the full substrate record for one (namespace, app,
 // deployment). Tenant + app + deployment are recorded redundantly in the
 // body so a leaked/exported substrate can be self-described without its
 // Bao path.
-type Substrate struct {
+type Schmutz struct {
 	// Version pins the schema. Readers reject mismatched versions rather
 	// than silently misinterpreting fields.
 	Version int `json:"version" yaml:"version"`
@@ -164,7 +164,7 @@ type FileCheck struct {
 // hostname is derived from the deployment slug. Callers that need to override
 // the SSH bind (non-standard port, different hostname) should set IncludeBase
 // to false and include their own SSH bind in Binds.
-func (s *Substrate) EffectiveBinds() []Bind {
+func (s *Schmutz) EffectiveBinds() []Bind {
 	if s.IncludeBase != nil && !*s.IncludeBase {
 		return s.Binds
 	}
@@ -191,12 +191,12 @@ func (s *Substrate) EffectiveBinds() []Bind {
 // Validate returns nil if s is internally consistent and within the
 // MVP's accepted shape. Errors are informative; an operator should be
 // able to fix the spec from the message alone.
-func (s *Substrate) Validate() error {
+func (s *Schmutz) Validate() error {
 	if s == nil {
 		return errors.New("substrate: nil spec")
 	}
-	if s.Version != SubstrateSchemaVersion {
-		return fmt.Errorf("substrate: unsupported version %d (this build expects %d)", s.Version, SubstrateSchemaVersion)
+	if s.Version != SchmutzSchemaVersion {
+		return fmt.Errorf("substrate: unsupported version %d (this build expects %d)", s.Version, SchmutzSchemaVersion)
 	}
 	if !slugPattern.MatchString(s.Tenant) {
 		return fmt.Errorf("substrate: tenant %q is not a valid slug", s.Tenant)
@@ -307,7 +307,7 @@ func (p *Posture) Validate() error {
 //
 // expectedTenant/expectedApp/expectedDeployment come from the path the
 // reader actually fetched, not from the body.
-func (s *Substrate) MatchesPath(expectedTenant, expectedApp, expectedDeployment string) error {
+func (s *Schmutz) MatchesPath(expectedTenant, expectedApp, expectedDeployment string) error {
 	if s.Tenant != expectedTenant {
 		return fmt.Errorf("substrate: tenant %q in body doesn't match path %q", s.Tenant, expectedTenant)
 	}

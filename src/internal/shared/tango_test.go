@@ -97,7 +97,7 @@ var activepiecesBlueprintJSON = []byte(`{
 // ---- tests ------------------------------------------------------------------
 
 func TestBlueprint_ParseRealInventree(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	if err := json.Unmarshal(inventreeBlueprintJSON, &b); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestBlueprint_ParseRealInventree(t *testing.T) {
 }
 
 func TestBlueprint_ParseDiscoveryEntry(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	if err := json.Unmarshal(activepiecesBlueprintJSON, &b); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestBlueprint_ParseDiscoveryEntry(t *testing.T) {
 }
 
 func TestBlueprint_JSONRoundTrip(t *testing.T) {
-	var original Blueprint
+	var original Tango
 	if err := json.Unmarshal(inventreeBlueprintJSON, &original); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestBlueprint_JSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("JSON(): %v", err)
 	}
-	var roundTripped Blueprint
+	var roundTripped Tango
 	if err := json.Unmarshal(data, &roundTripped); err != nil {
 		t.Fatalf("re-parse: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestBlueprint_ResolveTier(t *testing.T) {
 
 func TestBlueprint_Validate_AppIDSlug(t *testing.T) {
 	for _, id := range []string{"", "Inventree", "inv_app", "-leading"} {
-		var b Blueprint
+		var b Tango
 		_ = json.Unmarshal(inventreeBlueprintJSON, &b)
 		b.AppID = id
 		if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "app_id") {
@@ -213,7 +213,7 @@ func TestBlueprint_Validate_AppIDSlug(t *testing.T) {
 
 func TestBlueprint_Validate_UUID(t *testing.T) {
 	for _, u := range []string{"", "not-a-uuid", "d0afad25-f68e-3c79-b572-739e04d7d789"} {
-		var b Blueprint
+		var b Tango
 		_ = json.Unmarshal(inventreeBlueprintJSON, &b)
 		b.UUID = u
 		if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "uuid") {
@@ -223,7 +223,7 @@ func TestBlueprint_Validate_UUID(t *testing.T) {
 }
 
 func TestBlueprint_Validate_ActiveRequiresBaoPath(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	_ = json.Unmarshal(inventreeBlueprintJSON, &b)
 	b.Runtime.BaoSecretsPath = ""
 	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "bao_secrets_path") {
@@ -232,7 +232,7 @@ func TestBlueprint_Validate_ActiveRequiresBaoPath(t *testing.T) {
 }
 
 func TestBlueprint_Validate_DiscoveryNoBaoPathOK(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	_ = json.Unmarshal(activepiecesBlueprintJSON, &b)
 	if err := b.Validate(); err != nil {
 		t.Errorf("discovery without bao path should be valid: %v", err)
@@ -240,7 +240,7 @@ func TestBlueprint_Validate_DiscoveryNoBaoPathOK(t *testing.T) {
 }
 
 func TestBlueprint_Validate_SizingTier(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	_ = json.Unmarshal(inventreeBlueprintJSON, &b)
 	b.Sizing.Min = "small" // not a tier slug
 	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "sizing.min") {
@@ -249,7 +249,7 @@ func TestBlueprint_Validate_SizingTier(t *testing.T) {
 }
 
 func TestBlueprint_Validate_HealthStatus(t *testing.T) {
-	var b Blueprint
+	var b Tango
 	_ = json.Unmarshal(inventreeBlueprintJSON, &b)
 	b.Runtime.Health.ExpectStatus = 99
 	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "expect_status") {

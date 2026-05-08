@@ -15,7 +15,7 @@ import (
 // The format is deliberately verbose-but-scannable: an operator should
 // be able to read the log line and know exactly what the agent thinks
 // it should be doing without cross-referencing Bao.
-func planLog(s *shared.Substrate) string {
+func planLog(s *shared.Schmutz) string {
 	if s == nil {
 		return "substrate: plan: <nil>"
 	}
