@@ -401,9 +401,14 @@ T&C is considered accepted at install time when running via systemd.`,
 			// v1 takes NO actions on the host — the reconciler that
 			// applies the plan to ziti-edge-tunnel + Caddy is a separate
 			// subsystem that arrives once the plan log is trusted.
+			//
+			// PollOnce is called synchronously so that the gateway check
+			// below sees the current substrate on every start/restart — not
+			// a stale nil from the async goroutine race.
 			substrateWatcher := substrate.NewWatcher(substrate.DefaultWatcherConfig())
+			substrateWatcher.PollOnce(baoCtx)
 			go func() {
-				if err := substrateWatcher.Run(baoCtx); err != nil {
+				if err := substrateWatcher.RunLoop(baoCtx); err != nil {
 					log.Printf("substrate: watcher error: %v", err)
 				}
 			}()
@@ -412,7 +417,9 @@ T&C is considered accepted at install time when running via systemd.`,
 			// The gateway serves schmutz-api.{zone} over Ziti: service index,
 			// OpenAPI specs, and Scalar docs.
 			if spec := substrateWatcher.LastSpec(); spec != nil && spec.API != nil && spec.API.Enabled {
-				gatewayCfg, cfgErr := gateway.LoadRuntimeConfig(schmutzDir, "/run/bao-token")
+				// Pass spec.API directly so the gateway discovery loop uses
+				// the services declared in Bao, not a stale local file.
+				gatewayCfg, cfgErr := gateway.LoadRuntimeConfig(schmutzDir, "/run/bao-token", spec.API)
 				if cfgErr != nil {
 					log.Printf("gateway: config load failed: %v — skipping", cfgErr)
 				} else {

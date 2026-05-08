@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/KontangoOSS/schmutz/internal/discover"
@@ -107,13 +108,15 @@ func probeSpecOnPort(ctx context.Context, port uint16) ([]byte, error) {
 	return nil, fmt.Errorf("no spec found on port %d", port)
 }
 
-// fetchSpecBytes fetches raw bytes from a URL, returning error if status != 200.
+// fetchSpecBytes fetches raw bytes from a URL, returning error if status != 200
+// or if the response content-type is HTML (which indicates an SPA catch-all,
+// not a machine-readable OpenAPI spec).
 func fetchSpecBytes(ctx context.Context, url string) ([]byte, error) {
 	req, err := newGetRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
-	b, status, err := doHTTP(req)
+	b, status, contentType, err := doHTTPWithType(req)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +125,10 @@ func fetchSpecBytes(ctx context.Context, url string) ([]byte, error) {
 	}
 	if len(b) == 0 {
 		return nil, fmt.Errorf("empty response from %s", url)
+	}
+	// Reject HTML responses — SPAs return 200 + text/html for every path.
+	if strings.Contains(strings.ToLower(contentType), "text/html") {
+		return nil, fmt.Errorf("html response (SPA catch-all) from %s", url)
 	}
 	return b, nil
 }

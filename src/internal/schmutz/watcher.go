@@ -83,19 +83,19 @@ func NewWatcher(cfg WatcherConfig) *Watcher {
 	return &Watcher{cfg: cfg, logger: logger}
 }
 
-// Run drives the watcher. Polls once at startup, then every Interval
-// thereafter. Returns nil when ctx is cancelled. A failed poll does NOT
-// stop the loop — the next tick retries.
-//
-// Sending SIGHUP to the process triggers an immediate re-poll without
-// waiting for the next interval — useful after an operator runs
-// POST /api/v1/sync to push a config change from git.
-func (w *Watcher) Run(ctx context.Context) error {
+// PollOnce performs a single synchronous substrate poll. Call this before
+// starting RunLoop so that the caller can inspect LastSpec immediately
+// after — e.g. to decide whether to start the embedded API gateway.
+func (w *Watcher) PollOnce(ctx context.Context) {
 	w.logger.Printf("substrate: watcher starting (agent_json=%s token=%s interval=%s)",
 		w.cfg.AgentJSONPath, w.cfg.BaoTokenPath, w.cfg.Interval)
-
 	w.tick(ctx)
+}
 
+// RunLoop drives the periodic poll loop and SIGHUP handler. It does NOT
+// perform an initial poll — call PollOnce first if you need the initial
+// spec before starting the loop. Returns nil when ctx is cancelled.
+func (w *Watcher) RunLoop(ctx context.Context) error {
 	t := time.NewTicker(w.cfg.Interval)
 	defer t.Stop()
 
@@ -115,6 +115,21 @@ func (w *Watcher) Run(ctx context.Context) error {
 			w.tick(ctx)
 		}
 	}
+}
+
+// Run drives the watcher. Polls once at startup, then every Interval
+// thereafter. Returns nil when ctx is cancelled. A failed poll does NOT
+// stop the loop — the next tick retries.
+//
+// Sending SIGHUP to the process triggers an immediate re-poll without
+// waiting for the next interval — useful after an operator runs
+// POST /api/v1/sync to push a config change from git.
+//
+// Deprecated: prefer PollOnce + RunLoop to avoid a race between the
+// first fetch and any startup logic that reads LastSpec.
+func (w *Watcher) Run(ctx context.Context) error {
+	w.PollOnce(ctx)
+	return w.RunLoop(ctx)
 }
 
 // tick performs one poll. Failure modes are logged and recorded; none
