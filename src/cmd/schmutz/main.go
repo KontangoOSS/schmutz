@@ -27,7 +27,7 @@ import (
 
 // Version is set at link time by GoReleaser via -ldflags "-X main.Version=..."
 // Defaults to a dev string when built directly with `go build`.
-var Version = "0.3.1-dev"
+var Version = "0.4.0-dev"
 
 const (
 	schmutzDir       = "/etc/schmutz"
