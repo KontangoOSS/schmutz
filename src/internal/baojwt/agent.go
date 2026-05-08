@@ -53,12 +53,17 @@ func (a *AgentConfig) Validate() error {
 }
 
 // Bundle mirrors the controller's BaoBundleResponse — what /api/bao-bundle
-// returns. Only the fields we consume are listed.
+// and /api/v1/enroll return. Only the fields we consume are listed.
+//
+// Hub enrollment (POST /api/v1/enroll) populates SecretID directly so the
+// agent never needs to call Bao during bootstrap. Legacy /api/bao-bundle
+// still populates SecretIDWrapToken; InstallBundle handles both.
 type Bundle struct {
 	Role              string `json:"role"`
 	RoleID            string `json:"role_id"`
-	SecretIDWrapToken string `json:"secret_id_wrap_token"`
-	WrapTTLSeconds    int    `json:"wrap_ttl_seconds"`
+	SecretID          string `json:"secret_id,omitempty"`            // hub path: plain secret_id
+	SecretIDWrapToken string `json:"secret_id_wrap_token,omitempty"` // legacy path: wrap token
+	WrapTTLSeconds    int    `json:"wrap_ttl_seconds,omitempty"`
 	OIDCRole          string `json:"oidc_role"`
 	JWTRole           string `json:"jwt_role"`
 	Tenant            string `json:"tenant"`
@@ -98,16 +103,17 @@ func FetchBundle(ctx context.Context, controllerURL, zitiIdentity string, hc *ht
 	if err := json.Unmarshal(body, &b); err != nil {
 		return nil, fmt.Errorf("baojwt: decode bundle: %w", err)
 	}
-	if b.SecretIDWrapToken == "" || b.RoleID == "" || b.BaoAddr == "" {
-		return nil, fmt.Errorf("baojwt: bundle missing required fields")
+	if (b.SecretID == "" && b.SecretIDWrapToken == "") || b.RoleID == "" || b.BaoAddr == "" {
+		return nil, fmt.Errorf("baojwt: bundle missing required fields (need secret_id or secret_id_wrap_token)")
 	}
 	return &b, nil
 }
 
-// InstallBundle persists an unwrapped bundle to the on-disk agent config.
+// InstallBundle persists a bundle to the on-disk agent config.
 //
-// It (1) calls Bao to unwrap the secret_id wrap-token, (2) validates the
-// resulting credentials by performing an approle login, (3) atomically
+// Hub path (SecretID set): writes directly — no Bao call needed at enrollment.
+// Legacy path (SecretIDWrapToken set): unwraps via Bao first.
+// Either way validates credentials with an approle login, then atomically
 // writes /etc/schmutz/agent.json with mode 0600.
 //
 // Returns the AgentConfig that was written.
@@ -115,19 +121,31 @@ func InstallBundle(ctx context.Context, b *Bundle, agentJSONPath string) (*Agent
 	if b == nil {
 		return nil, fmt.Errorf("baojwt: install: bundle nil")
 	}
+	if b.RoleID == "" || b.BaoAddr == "" {
+		return nil, fmt.Errorf("baojwt: install: bundle missing role_id or bao_addr")
+	}
+
+	var secretID string
 	cli := NewClient(b.BaoAddr, 0)
 
-	// 1. Unwrap.
-	data, err := cli.Unwrap(ctx, b.SecretIDWrapToken)
-	if err != nil {
-		return nil, fmt.Errorf("baojwt: install: unwrap: %w", err)
-	}
-	secretID, _ := data["secret_id"].(string)
-	if secretID == "" {
-		return nil, fmt.Errorf("baojwt: install: unwrap returned no secret_id")
+	if b.SecretID != "" {
+		// Hub path: secret_id already resolved server-side.
+		secretID = b.SecretID
+	} else if b.SecretIDWrapToken != "" {
+		// Legacy path: unwrap the response-wrapped secret_id.
+		data, err := cli.Unwrap(ctx, b.SecretIDWrapToken)
+		if err != nil {
+			return nil, fmt.Errorf("baojwt: install: unwrap: %w", err)
+		}
+		secretID, _ = data["secret_id"].(string)
+		if secretID == "" {
+			return nil, fmt.Errorf("baojwt: install: unwrap returned no secret_id")
+		}
+	} else {
+		return nil, fmt.Errorf("baojwt: install: bundle missing both secret_id and secret_id_wrap_token")
 	}
 
-	// 2. Validate by login.
+	// Validate by login.
 	if _, err := cli.ApproleLogin(ctx, b.RoleID, secretID); err != nil {
 		return nil, fmt.Errorf("baojwt: install: approle login validate: %w", err)
 	}

@@ -85,19 +85,18 @@ type hubClaimResponse struct {
 		IdentityJSON string `json:"identity_json"` // Ziti enrollment JWT
 	} `json:"ziti_identity"`
 	BaoBundle struct {
-		Role              string `json:"role"`
-		RoleID            string `json:"role_id"`
-		SecretIDWrapToken string `json:"secret_id_wrap_token"`
-		WrapTTLSeconds    int    `json:"wrap_ttl_seconds"`
-		OIDCRole          string `json:"oidc_role"`
-		JWTRole           string `json:"jwt_role"`
-		Tenant            string `json:"tenant"`
-		App               string `json:"app"`
-		Deployment        string `json:"deployment"`
-		Flavor            string `json:"flavor"`
-		ZitiIdentity      string `json:"ziti_identity"`
-		EntityID          string `json:"entity_id"`
-		BaoAddr           string `json:"bao_addr"`
+		Role         string `json:"role"`
+		RoleID       string `json:"role_id"`
+		SecretID     string `json:"secret_id,omitempty"`
+		OIDCRole     string `json:"oidc_role"`
+		JWTRole      string `json:"jwt_role"`
+		Tenant       string `json:"tenant"`
+		App          string `json:"app"`
+		Deployment   string `json:"deployment"`
+		Flavor       string `json:"flavor"`
+		ZitiIdentity string `json:"ziti_identity"`
+		EntityID     string `json:"entity_id"`
+		BaoAddr      string `json:"bao_addr"`
 	} `json:"bao_bundle"`
 	Error string `json:"error,omitempty"`
 }
@@ -181,10 +180,10 @@ func RegisterHub(ctx context.Context, cfg HubEnrollConfig) (*HubEnrollResult, er
 		return nil, fmt.Errorf("enroll/hub: unexpected status %d: %s", resp.StatusCode, body)
 	}
 	if claimResp.ZitiIdentity.IdentityJSON == "" {
-		return nil, fmt.Errorf("enroll/hub: response missing ziti identity JWT")
+		return nil, fmt.Errorf("enroll/hub: response missing ziti identity JSON")
 	}
-	if claimResp.BaoBundle.RoleID == "" || claimResp.BaoBundle.BaoAddr == "" {
-		return nil, fmt.Errorf("enroll/hub: response missing bao bundle fields")
+	if claimResp.BaoBundle.SecretID == "" || claimResp.BaoBundle.RoleID == "" || claimResp.BaoBundle.BaoAddr == "" {
+		return nil, fmt.Errorf("enroll/hub: response missing bao bundle fields (secret_id, role_id, bao_addr required)")
 	}
 
 	// 2. Write the identity JSON the hub already enrolled server-side.
@@ -197,22 +196,20 @@ func RegisterHub(ctx context.Context, cfg HubEnrollConfig) (*HubEnrollResult, er
 
 	// 3. Persist the Bao bundle as /etc/schmutz/agent.json so the
 	// bao-jwt subsystem can start refreshing /run/bao-token.
-	// The bundle carries a response-wrapped secret_id; InstallBundle
-	// unwraps it and writes the resolved secret_id to disk.
+	// The hub sends a plain secret_id; InstallBundle writes it directly.
 	b := &baojwt.Bundle{
-		Role:              claimResp.BaoBundle.Role,
-		RoleID:            claimResp.BaoBundle.RoleID,
-		SecretIDWrapToken: claimResp.BaoBundle.SecretIDWrapToken,
-		WrapTTLSeconds:    claimResp.BaoBundle.WrapTTLSeconds,
-		OIDCRole:          claimResp.BaoBundle.OIDCRole,
-		JWTRole:           claimResp.BaoBundle.JWTRole,
-		Tenant:            claimResp.BaoBundle.Tenant,
-		App:               claimResp.BaoBundle.App,
-		Deployment:        claimResp.BaoBundle.Deployment,
-		Flavor:            claimResp.BaoBundle.Flavor,
-		ZitiIdentity:      claimResp.ZitiIdentity.Name,
-		EntityID:          claimResp.BaoBundle.EntityID,
-		BaoAddr:           claimResp.BaoBundle.BaoAddr,
+		Role:         claimResp.BaoBundle.Role,
+		RoleID:       claimResp.BaoBundle.RoleID,
+		SecretID:     claimResp.BaoBundle.SecretID,
+		OIDCRole:     claimResp.BaoBundle.OIDCRole,
+		JWTRole:      claimResp.BaoBundle.JWTRole,
+		Tenant:       claimResp.BaoBundle.Tenant,
+		App:          claimResp.BaoBundle.App,
+		Deployment:   claimResp.BaoBundle.Deployment,
+		Flavor:       claimResp.BaoBundle.Flavor,
+		ZitiIdentity: claimResp.ZitiIdentity.Name,
+		EntityID:     claimResp.BaoBundle.EntityID,
+		BaoAddr:      claimResp.BaoBundle.BaoAddr,
 	}
 	if _, err := baojwt.InstallBundle(ctx, b, cfg.AgentJSONPath); err != nil {
 		return nil, fmt.Errorf("enroll/hub: install bao bundle: %w", err)

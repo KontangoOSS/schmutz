@@ -53,27 +53,26 @@ func validHubResponse() hubClaimResponse {
 			IdentityJSON: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZW0iOiJvdHQifQ.sig",
 		},
 		BaoBundle: struct {
-			Role              string `json:"role"`
-			RoleID            string `json:"role_id"`
-			SecretIDWrapToken string `json:"secret_id_wrap_token"`
-			WrapTTLSeconds    int    `json:"wrap_ttl_seconds"`
-			OIDCRole          string `json:"oidc_role"`
-			JWTRole           string `json:"jwt_role"`
-			Tenant            string `json:"tenant"`
-			App               string `json:"app"`
-			Deployment        string `json:"deployment"`
-			Flavor            string `json:"flavor"`
-			ZitiIdentity      string `json:"ziti_identity"`
-			EntityID          string `json:"entity_id"`
-			BaoAddr           string `json:"bao_addr"`
+			Role         string `json:"role"`
+			RoleID       string `json:"role_id"`
+			SecretID     string `json:"secret_id,omitempty"`
+			OIDCRole     string `json:"oidc_role"`
+			JWTRole      string `json:"jwt_role"`
+			Tenant       string `json:"tenant"`
+			App          string `json:"app"`
+			Deployment   string `json:"deployment"`
+			Flavor       string `json:"flavor"`
+			ZitiIdentity string `json:"ziti_identity"`
+			EntityID     string `json:"entity_id"`
+			BaoAddr      string `json:"bao_addr"`
 		}{
 			Role: "kontango-inventree-prod-02", RoleID: "rid-test",
-			SecretIDWrapToken: "s.testwrap", WrapTTLSeconds: 300,
+			SecretID: "test-secret-id-plain",
 			OIDCRole: "kontango-inventree-prod-02-token",
 			JWTRole:  "kontango-inventree-jwt-app",
 			Tenant: "kontango", App: "inventree", Deployment: "prod-02",
 			Flavor: "app-host", ZitiIdentity: "machine-test1234",
-			EntityID: "ent-test", BaoAddr: "http://bao.tango:8200",
+			EntityID: "ent-test", BaoAddr: "http://127.0.0.1:9999",
 		},
 	}
 }
@@ -175,8 +174,8 @@ func TestRegisterHub_MissingZitiJWT(t *testing.T) {
 		IdentityPath:  "/tmp/test.json",
 		AgentJSONPath: "/tmp/test-agent.json",
 	})
-	if err == nil || !strings.Contains(err.Error(), "missing ziti identity JWT") {
-		t.Errorf("expected missing-jwt error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "missing ziti identity JSON") {
+		t.Errorf("expected missing-identity-json error, got %v", err)
 	}
 }
 
