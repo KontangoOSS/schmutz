@@ -135,6 +135,31 @@ func (g *GatewayConfig) EffectivePort() uint16 {
 	return 7070
 }
 
+// Validate checks the gateway config for obvious misconfigurations.
+// Returns nil if the config is absent or disabled.
+func (g *GatewayConfig) Validate() error {
+	if g == nil || !g.Enabled {
+		return nil
+	}
+	if g.OIDCRole == "" {
+		return fmt.Errorf("gateway: oidc_role required when api.enabled is true")
+	}
+	seen := make(map[string]bool, len(g.Services))
+	for i, svc := range g.Services {
+		if svc.Name == "" {
+			return fmt.Errorf("gateway: services[%d].name must not be empty", i)
+		}
+		if svc.Port == 0 {
+			return fmt.Errorf("gateway: services[%d].port must be > 0", i)
+		}
+		if seen[svc.Name] {
+			return fmt.Errorf("gateway: duplicate service name %q", svc.Name)
+		}
+		seen[svc.Name] = true
+	}
+	return nil
+}
+
 // GatewayService is one service hint in the gateway config.
 type GatewayService struct {
 	Name string `json:"name" yaml:"name"`
@@ -307,6 +332,9 @@ func (s *Schmutz) Validate() error {
 		if err := s.Posture.Validate(); err != nil {
 			return err
 		}
+	}
+	if err := s.API.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

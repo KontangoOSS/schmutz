@@ -318,6 +318,26 @@ api:
 	}
 }
 
+func TestGatewayConfig_EffectivePort(t *testing.T) {
+	cases := []struct {
+		name string
+		port uint16
+		want uint16
+	}{
+		{"zero uses default", 0, 7070},
+		{"explicit port returned", 7070, 7070},
+		{"custom port returned", 9999, 9999},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			g := &GatewayConfig{Port: c.port}
+			if got := g.EffectivePort(); got != c.want {
+				t.Errorf("EffectivePort(): got %d want %d", got, c.want)
+			}
+		})
+	}
+}
+
 // Empty Posture is allowed.
 func TestValidate_NoPosture(t *testing.T) {
 	s := validInventreeSpec()
