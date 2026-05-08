@@ -106,6 +106,41 @@ type Schmutz struct {
 	// All dependency kinds are additive — the app still works without them
 	// at the schmutz level; they're hints for lifecycle tooling.
 	Dependencies []Dependency `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`
+
+	// API declares the embedded gateway configuration. When enabled, the agent
+	// starts a local HTTP server on Port that serves the service index,
+	// OpenAPI specs, and Scalar docs. The schmutz-api.{zone} Ziti service
+	// is bound to this server.
+	API *GatewayConfig `json:"api,omitempty" yaml:"api,omitempty"`
+}
+
+// GatewayConfig configures the embedded API gateway started by the agent.
+type GatewayConfig struct {
+	// Enabled controls whether the gateway starts. Default false.
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Port is the localhost port the gateway HTTP server listens on.
+	// The Ziti service schmutz-api.{zone} forwards here. Default 7070.
+	Port uint16 `json:"port,omitempty" yaml:"port,omitempty"`
+	// OIDCRole is the Bao OIDC role used to mint the upstream JWT token.
+	OIDCRole string `json:"oidc_role,omitempty" yaml:"oidc_role,omitempty"`
+	// Services declares hints for the discovery scan.
+	Services []GatewayService `json:"services,omitempty" yaml:"services,omitempty"`
+}
+
+// EffectivePort returns the configured port or the default 7070.
+func (g *GatewayConfig) EffectivePort() uint16 {
+	if g.Port > 0 {
+		return g.Port
+	}
+	return 7070
+}
+
+// GatewayService is one service hint in the gateway config.
+type GatewayService struct {
+	Name string `json:"name" yaml:"name"`
+	Port uint16 `json:"port" yaml:"port"`
+	// Spec is an optional URL hint for the OpenAPI spec location.
+	Spec string `json:"spec,omitempty" yaml:"spec,omitempty"`
 }
 
 // Bind declares one overlay service this host binds.

@@ -3,6 +3,8 @@ package shared
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // validInventreeSpec returns the canonical example used across most tests.
@@ -271,6 +273,48 @@ func TestValidate_KonmailExample(t *testing.T) {
 	}
 	if err := s.Validate(); err != nil {
 		t.Errorf("konmail example invalid: %v", err)
+	}
+}
+
+func TestSchmutz_GatewayConfig_ParsesFromYAML(t *testing.T) {
+	raw := `
+version: 1
+app: ticketarr
+api:
+  enabled: true
+  port: 7070
+  oidc_role: kontango-ticketarr-prod-01-token
+  services:
+    - name: ticketarr
+      port: 9090
+      spec: http://localhost:9090/swagger.json
+    - name: postgres
+      port: 5432
+`
+	var s Schmutz
+	if err := yaml.Unmarshal([]byte(raw), &s); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if s.API == nil {
+		t.Fatal("API should not be nil")
+	}
+	if !s.API.Enabled {
+		t.Error("API.Enabled should be true")
+	}
+	if s.API.Port != 7070 {
+		t.Errorf("Port: got %d want 7070", s.API.Port)
+	}
+	if len(s.API.Services) != 2 {
+		t.Fatalf("Services: got %d want 2", len(s.API.Services))
+	}
+	if s.API.Services[0].Name != "ticketarr" {
+		t.Errorf("Services[0].Name: got %q", s.API.Services[0].Name)
+	}
+	if s.API.Services[0].Port != 9090 {
+		t.Errorf("Services[0].Port: got %d", s.API.Services[0].Port)
+	}
+	if s.API.Services[1].Name != "postgres" {
+		t.Errorf("Services[1].Name: got %q", s.API.Services[1].Name)
 	}
 }
 
