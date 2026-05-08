@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/KontangoOSS/schmutz/internal/baojwt"
 	"github.com/KontangoOSS/schmutz/internal/discover"
 	"github.com/KontangoOSS/schmutz/internal/enroll"
+	"github.com/KontangoOSS/schmutz/internal/gateway"
 	"github.com/KontangoOSS/schmutz/internal/join"
 	"github.com/KontangoOSS/schmutz/internal/schmutz"
 	"github.com/KontangoOSS/schmutz/internal/telemetry"
@@ -405,6 +407,33 @@ T&C is considered accepted at install time when running via systemd.`,
 					log.Printf("substrate: watcher error: %v", err)
 				}
 			}()
+
+			// Start the embedded API gateway when api.enabled is declared in the substrate.
+			// The gateway serves schmutz-api.{zone} over Ziti: service index,
+			// OpenAPI specs, and Scalar docs.
+			if spec := substrateWatcher.LastSpec(); spec != nil && spec.API != nil && spec.API.Enabled {
+				gatewayCfg, cfgErr := gateway.LoadRuntimeConfig(schmutzDir, "/run/bao-token")
+				if cfgErr != nil {
+					log.Printf("gateway: config load failed: %v — skipping", cfgErr)
+				} else {
+					gw := gateway.New(gatewayCfg)
+					gwCtx, gwCancel := context.WithCancel(baoCtx)
+					defer gwCancel()
+					gwServer, gwErr := gw.Run(gwCtx)
+					if gwErr != nil {
+						log.Printf("gateway: start failed: %v — skipping", gwErr)
+					} else {
+						port := spec.API.EffectivePort()
+						go func() {
+							addr := fmt.Sprintf("127.0.0.1:%d", port)
+							log.Printf("gateway: serving on %s (zone: %s)", addr, gatewayCfg.Zone)
+							if err := http.ListenAndServe(addr, gwServer); err != nil {
+								log.Printf("gateway: listener error: %v", err)
+							}
+						}()
+					}
+				}
+			}
 
 			// Bind any services already provisioned in the registry (re-start after
 			// approval). New machines start with zero services — they bind from
