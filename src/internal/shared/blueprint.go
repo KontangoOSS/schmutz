@@ -211,90 +211,6 @@ func ResolveTier(slug, root string) string {
 	return root + "/" + slug
 }
 
-// ----- legacy interop -----
-
-// FromKV parses the old flat map[string]string KV format (Bao KV v2
-// string-only records) into a Blueprint. Used to migrate existing
-// public/ Bao entries to the new JSON format.
-//
-// Deprecated: new blueprints should be authored as blueprint.json.
-// This method exists only for the one-time migration and will be
-// removed once all blueprints are in JSON format.
-func (b *Blueprint) FromKV(kv map[string]string) error {
-	*b = Blueprint{Schema: BlueprintSchemaVersion}
-	b.AppID = kv["app_id"]
-	b.UUID = kv["uuid"]
-	b.Identity = BlueprintIdentity{
-		DisplayName: kv["display_name"],
-		Description: kv["description"],
-		Category:    stripPrefix(kv["category"], "public/categories/"),
-		License:     stripPrefix(kv["upstream_license"], "public/licenses/"),
-	}
-	b.Links = BlueprintLinks{
-		GitHub:   kv["github_url"],
-		Forgejo:  kv["forgejo_url"],
-		Upstream: kv["upstream_repo"],
-		Docs:     kv["upstream_docs"],
-		Issues:   kv["issues_url"],
-		Funding:  kv["funding_url"],
-		Plugin:   kv["plugin_url"],
-	}
-	b.Sizing = BlueprintSizing{
-		Min:         stripPrefix(kv["sizing_min"], "public/sizing/"),
-		Recommended: stripPrefix(kv["sizing_recommended"], "public/sizing/"),
-		Max:         stripPrefix(kv["sizing_max"], "public/sizing/"),
-	}
-	def := stripPrefix(kv["default_deployment_platform"], "public/deployment-platforms/")
-	var compat []string
-	for _, p := range strings.Split(kv["compatible_deployment_platforms"], ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			compat = append(compat, stripPrefix(p, "public/deployment-platforms/"))
-		}
-	}
-	b.Deployment = BlueprintDeployment{
-		DefaultOS:           stripPrefix(kv["default_os"], "public/os/"),
-		DefaultPlatform:     def,
-		CompatiblePlatforms: compat,
-		DockerSupported:     kv["docker_supported"] == "true",
-	}
-	var secReqs []SecretRequirement
-	for _, item := range strings.Split(kv["secret_requirements"], ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		parts := strings.SplitN(item, ":", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("blueprint: secret_requirements %q: want <ref>:<group>", item)
-		}
-		secReqs = append(secReqs, SecretRequirement{
-			Ref:   stripPrefix(strings.TrimSpace(parts[0]), "public/secret-types/"),
-			Group: strings.TrimSpace(parts[1]),
-		})
-	}
-	expectStatus, _ := parseIntOptional(kv["health_expect_status"])
-	b.Runtime = BlueprintRuntime{
-		BaoSecretsPath:     kv["bao_secrets_path"],
-		SecretRequirements: secReqs,
-		Health: BlueprintHealth{
-			URL:          kv["health_url"],
-			ExpectStatus: expectStatus,
-		},
-	}
-	active := kv["active"] == "true"
-	stars, _ := parseIntOptional(kv["stargazers"])
-	b.Catalog = BlueprintCatalog{
-		Added:           kv["catalog_added"],
-		Maintainer:      kv["catalog_maintainer"],
-		Active:          active,
-		DiscoverySource: kv["discovery_source"],
-		Stargazers:      stars,
-		LatestTag:       kv["upstream_latest_tag"],
-		LastUpdate:      kv["upstream_last_update"],
-	}
-	return nil
-}
 
 // MarshalJSON produces the canonical blueprint.json representation.
 func (b *Blueprint) MarshalJSON() ([]byte, error) {
@@ -319,17 +235,3 @@ func (b *Blueprint) JSON() ([]byte, error) {
 	return json.MarshalIndent(b, "", "  ")
 }
 
-// ----- helpers -----
-
-func stripPrefix(s, prefix string) string {
-	return strings.TrimPrefix(s, prefix)
-}
-
-func parseIntOptional(s string) (int, error) {
-	if s == "" {
-		return 0, nil
-	}
-	var n int
-	_, err := fmt.Sscan(s, &n)
-	return n, err
-}
