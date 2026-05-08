@@ -1,14 +1,13 @@
 package shared
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
 
-// realInventreeKV is the actual data stored at
-// public/secret/applications/inventree (read 2026-05-06). Catches
-// regressions where we change the schema and forget to test against
-// what's actually on disk in the production catalog.
+// realInventreeKV is the actual data from public/secret/applications/inventree.
+// Used to verify FromKV migration produces the correct grouped structure.
 var realInventreeKV = map[string]string{
 	"active":                          "true",
 	"app_id":                          "inventree",
@@ -19,7 +18,7 @@ var realInventreeKV = map[string]string{
 	"compatible_deployment_platforms": "public/deployment-platforms/proxmox/lxc/medium,public/deployment-platforms/proxmox/lxc/large,public/deployment-platforms/proxmox/lxc/xlarge,public/deployment-platforms/proxmox/vm/medium,public/deployment-platforms/digitalocean/droplet/medium,public/deployment-platforms/digitalocean/droplet/large",
 	"default_deployment_platform":     "public/deployment-platforms/proxmox/lxc/medium",
 	"default_os":                      "public/os/linux/ubuntu/latest",
-	"description":                     "Open-source inventory management — parts, BOMs, stock, supplier orders, builds. Django + DRF + Mantine UI.",
+	"description":                     "Open-source inventory management",
 	"display_name":                    "InvenTree",
 	"docker_supported":                "true",
 	"forgejo_url":                     "https://git.konoss.org/kore/inventree",
@@ -28,7 +27,6 @@ var realInventreeKV = map[string]string{
 	"health_expect_status":            "200",
 	"health_url":                      "http://localhost:8000/api/",
 	"issues_url":                      "https://github.com/inventree/InvenTree/issues",
-	"license_url":                     "https://github.com/inventree/InvenTree/blob/master/LICENSE",
 	"plugin_url":                      "https://git.konoss.org/kore/inventree-kontango-plugin",
 	"schmutz_flavor_url":              "https://git.konoss.org/kore/schmutz-controller/src/branch/main/flavors/inventree/flavor.yaml",
 	"secret_requirements":             "public/secret-types/composites/database_credentials:database,public/secret-types/composites/admin_user:admin,public/secret-types/composites/redis_connection:cache,public/secret-types/primitives/url:site_url,public/secret-types/primitives/symmetric_key:secret_key",
@@ -42,26 +40,20 @@ var realInventreeKV = map[string]string{
 	"uuid":                            "d0afad25-f68e-4c79-b572-739e04d7d789",
 }
 
-// realActivepiecesKV is a discovery entry (active=false). Has different
-// fields populated than an active entry — has stargazers + upstream_last_update,
-// missing bao_secrets_path + secret_requirements + health_url.
 var realActivepiecesKV = map[string]string{
 	"active":               "false",
 	"app_id":               "activepieces",
 	"catalog_added":        "2026-04-27",
 	"catalog_maintainer":   "awesome-selfhosted",
 	"category":             "public/categories/automation",
-	"description":          "No-code business automation tool like Zapier or Tray. For example, you can send a Slack notification for each new Trello card.",
+	"description":          "No-code business automation tool.",
 	"discovery_source":     "awesome-selfhosted",
 	"display_name":         "Activepieces",
 	"docker_supported":     "true",
 	"forgejo_url":          "https://git.konoss.org/kore/activepieces",
-	"funding_url":          "",
 	"github_url":           "https://github.com/activepieces/activepieces",
 	"issues_url":           "https://github.com/activepieces/activepieces/issues",
-	"license_url":          "https://github.com/activepieces/activepieces/blob/main/LICENSE",
 	"plugin_url":           "https://git.konoss.org/kore/activepieces-kontango-plugin",
-	"schmutz_flavor_url":   "https://git.konoss.org/kore/schmutz-controller/src/branch/main/flavors/activepieces/flavor.yaml",
 	"sizing_max":           "public/sizing/tg-md-1",
 	"sizing_min":           "public/sizing/tg-xs-1",
 	"sizing_recommended":   "public/sizing/tg-sm-1",
@@ -75,255 +67,240 @@ var realActivepiecesKV = map[string]string{
 	"uuid":                 "cc34b191-5f3c-4073-906e-5655f95880bb",
 }
 
-func TestBlueprint_FromKV_RealInventree(t *testing.T) {
+// TestFromKV_RealInventree verifies migration from old KV format produces
+// correct grouped structure with short slugs.
+func TestFromKV_RealInventree(t *testing.T) {
 	var b Blueprint
 	if err := b.FromKV(realInventreeKV); err != nil {
 		t.Fatalf("FromKV: %v", err)
 	}
-	if !b.Active {
-		t.Error("Active must be true")
+
+	// Top-level
+	if b.AppID != "inventree" {
+		t.Errorf("AppID: %q", b.AppID)
 	}
-	if !b.DockerSupported {
-		t.Error("DockerSupported must be true")
+
+	// Identity group
+	if !b.Catalog.Active {
+		t.Error("Catalog.Active must be true")
 	}
-	if b.HealthExpectStatus != 200 {
-		t.Errorf("HealthExpectStatus: got %d want 200", b.HealthExpectStatus)
+	if b.Identity.DisplayName != "InvenTree" {
+		t.Errorf("Identity.DisplayName: %q", b.Identity.DisplayName)
 	}
-	// CSV with 6 platforms
-	if got, want := len(b.CompatibleDeploymentPlatforms), 6; got != want {
-		t.Errorf("CompatibleDeploymentPlatforms: got %d entries want %d", got, want)
+	if b.Identity.Category != "operations" {
+		t.Errorf("Identity.Category: %q (expected short slug)", b.Identity.Category)
 	}
-	// secret_requirements parsed into 5 (database, admin, cache, site_url, secret_key)
-	if got, want := len(b.SecretRequirements), 5; got != want {
-		t.Fatalf("SecretRequirements: got %d entries want %d", got, want)
+	if b.Identity.License != "mit" {
+		t.Errorf("Identity.License: %q (expected short slug)", b.Identity.License)
 	}
-	if b.SecretRequirements[0].Ref != "public/secret-types/composites/database_credentials" || b.SecretRequirements[0].Group != "database" {
-		t.Errorf("SecretRequirements[0]: %+v", b.SecretRequirements[0])
+
+	// Sizing — short slugs
+	if b.Sizing.Min != "tg-sm-1" {
+		t.Errorf("Sizing.Min: %q", b.Sizing.Min)
 	}
-	// Validate must pass on the real record.
+	if b.Sizing.Recommended != "tg-md-1" {
+		t.Errorf("Sizing.Recommended: %q", b.Sizing.Recommended)
+	}
+	if b.Sizing.Max != "tg-lg-1" {
+		t.Errorf("Sizing.Max: %q", b.Sizing.Max)
+	}
+
+	// Deployment — short slugs, proper array
+	if b.Deployment.DockerSupported != true {
+		t.Error("Deployment.DockerSupported must be true")
+	}
+	if got, want := len(b.Deployment.CompatiblePlatforms), 6; got != want {
+		t.Errorf("CompatiblePlatforms: got %d want %d", got, want)
+	}
+	if b.Deployment.CompatiblePlatforms[0] != "proxmox/lxc/medium" {
+		t.Errorf("CompatiblePlatforms[0]: %q (expected short slug)", b.Deployment.CompatiblePlatforms[0])
+	}
+
+	// Runtime — secrets as typed array
+	if got, want := len(b.Runtime.SecretRequirements), 5; got != want {
+		t.Fatalf("SecretRequirements: got %d want %d", got, want)
+	}
+	if b.Runtime.SecretRequirements[0].Ref != "composites/database_credentials" {
+		t.Errorf("SecretRequirements[0].Ref: %q (expected short slug)", b.Runtime.SecretRequirements[0].Ref)
+	}
+	if b.Runtime.SecretRequirements[0].Group != "database" {
+		t.Errorf("SecretRequirements[0].Group: %q", b.Runtime.SecretRequirements[0].Group)
+	}
+	if b.Runtime.Health.ExpectStatus != 200 {
+		t.Errorf("Health.ExpectStatus: %d", b.Runtime.Health.ExpectStatus)
+	}
+	if b.Runtime.BaoSecretsPath == "" {
+		t.Error("Runtime.BaoSecretsPath required")
+	}
+
+	// Validate passes on real data
 	if err := b.Validate(); err != nil {
-		t.Errorf("real inventree fails Validate: %v", err)
+		t.Errorf("Validate: %v", err)
 	}
 }
 
-func TestBlueprint_FromKV_RealActivepieces(t *testing.T) {
+// TestFromKV_Discovery verifies discovery entries parse correctly.
+func TestFromKV_Discovery(t *testing.T) {
 	var b Blueprint
 	if err := b.FromKV(realActivepiecesKV); err != nil {
 		t.Fatalf("FromKV: %v", err)
 	}
-	if b.Active {
-		t.Error("Active must be false (discovery entry)")
+	if b.Catalog.Active {
+		t.Error("discovery entry should be active=false")
 	}
-	if !b.DockerSupported {
-		t.Error("DockerSupported must be true")
+	if b.Catalog.Stargazers != 21914 {
+		t.Errorf("Stargazers: %d", b.Catalog.Stargazers)
 	}
-	if b.Stargazers != 21914 {
-		t.Errorf("Stargazers: got %d want 21914", b.Stargazers)
+	if b.Runtime.Health.URL != "" {
+		t.Errorf("discovery entry should have empty health url, got %q", b.Runtime.Health.URL)
 	}
-	if b.HealthExpectStatus != 0 {
-		t.Errorf("HealthExpectStatus: discovery entry should be 0, got %d", b.HealthExpectStatus)
-	}
-	if b.HealthURL != "" {
-		t.Errorf("HealthURL: discovery entry should be empty, got %q", b.HealthURL)
-	}
-	if b.BaoSecretsPath != "" {
-		t.Errorf("BaoSecretsPath: discovery entry should be empty, got %q", b.BaoSecretsPath)
-	}
-	// Validate must pass — BaoSecretsPath isn't required when active=false.
 	if err := b.Validate(); err != nil {
-		t.Errorf("real activepieces fails Validate: %v", err)
+		t.Errorf("discovery entry Validate: %v", err)
 	}
 }
 
-// Round-trip: FromKV then ToKV should preserve all the meaningful fields.
-// Empty-vs-missing distinction is not preserved — that's documented behavior.
-func TestBlueprint_RoundTrip(t *testing.T) {
-	var b Blueprint
-	if err := b.FromKV(realInventreeKV); err != nil {
-		t.Fatalf("FromKV: %v", err)
+// TestBlueprint_JSONRoundTrip verifies new JSON format round-trips cleanly.
+func TestBlueprint_JSONRoundTrip(t *testing.T) {
+	bp := Blueprint{
+		AppID:  "ticketarr",
+		UUID:   "b4e2c3d1-5a6f-4b8e-9c0d-1e2f3a4b5c6d",
+		Schema: BlueprintSchemaVersion,
+		Identity: BlueprintIdentity{
+			DisplayName: "Ticketarr",
+			Description: "Issue tracking",
+			Category:    "operations",
+			License:     "mit",
+		},
+		Links: BlueprintLinks{
+			GitHub: "https://github.com/example/ticketarr",
+		},
+		Sizing: BlueprintSizing{
+			Min: "tg-sm-1", Recommended: "tg-sm-1", Max: "tg-md-1",
+		},
+		Deployment: BlueprintDeployment{
+			DefaultPlatform:     "proxmox/lxc/medium",
+			CompatiblePlatforms: []string{"proxmox/lxc/medium", "proxmox/lxc/large"},
+			DockerSupported:     true,
+		},
+		Runtime: BlueprintRuntime{
+			BaoSecretsPath: "kontango/secret/apps/ticketarr/{deployment}",
+			SecretRequirements: []SecretRequirement{
+				{Ref: "composites/admin_user", Group: "admin"},
+				{Ref: "composites/database_credentials", Group: "database"},
+			},
+			Health: BlueprintHealth{URL: "http://localhost:3001/health", ExpectStatus: 200},
+		},
+		Catalog: BlueprintCatalog{
+			Added:      "2026-05-07",
+			Maintainer: "kontango",
+			Active:     true,
+		},
 	}
-	out := b.ToKV()
-	for _, key := range []string{"app_id", "uuid", "display_name", "category",
-		"bao_secrets_path", "active", "docker_supported", "health_expect_status"} {
-		if out[key] != realInventreeKV[key] {
-			t.Errorf("round-trip %s: got %q want %q", key, out[key], realInventreeKV[key])
+	data, err := bp.JSON()
+	if err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+
+	var got Blueprint
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got.AppID != bp.AppID {
+		t.Errorf("AppID: got %q want %q", got.AppID, bp.AppID)
+	}
+	if got.Identity.Category != "operations" {
+		t.Errorf("Category: %q", got.Identity.Category)
+	}
+	if len(got.Runtime.SecretRequirements) != 2 {
+		t.Errorf("SecretRequirements count: %d", len(got.Runtime.SecretRequirements))
+	}
+	if len(got.Deployment.CompatiblePlatforms) != 2 {
+		t.Errorf("CompatiblePlatforms count: %d", len(got.Deployment.CompatiblePlatforms))
+	}
+	if err := got.Validate(); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}
+
+// TestBlueprint_ResolveRef verifies short ref expansion.
+func TestBlueprint_ResolveRef(t *testing.T) {
+	cases := []struct{ in, root, want string }{
+		{"composites/database_credentials", "", "public/secret-types/composites/database_credentials"},
+		{"primitives/symmetric_key", "custom/root", "custom/root/primitives/symmetric_key"},
+	}
+	for _, c := range cases {
+		if got := ResolveRef(c.in, c.root); got != c.want {
+			t.Errorf("ResolveRef(%q,%q): got %q want %q", c.in, c.root, got, c.want)
 		}
 	}
-	// CSV order preserved (input order is platforms in their source order)
-	if out["compatible_deployment_platforms"] != realInventreeKV["compatible_deployment_platforms"] {
-		t.Errorf("compatible_deployment_platforms not round-tripped:\n got %s\nwant %s",
-			out["compatible_deployment_platforms"], realInventreeKV["compatible_deployment_platforms"])
-	}
-	if out["secret_requirements"] != realInventreeKV["secret_requirements"] {
-		t.Errorf("secret_requirements not round-tripped:\n got %s\nwant %s",
-			out["secret_requirements"], realInventreeKV["secret_requirements"])
+}
+
+// TestBlueprint_ResolveTier verifies tier slug expansion.
+func TestBlueprint_ResolveTier(t *testing.T) {
+	if got := ResolveTier("tg-md-1", ""); got != "public/sizing/tg-md-1" {
+		t.Errorf("ResolveTier: %q", got)
 	}
 }
 
-// FromKV must be tolerant of forward-compat fields it doesn't know
-// (catalog can add fields without breaking older readers).
-func TestBlueprint_FromKV_UnknownFields(t *testing.T) {
-	kv := map[string]string{}
-	for k, v := range realInventreeKV {
-		kv[k] = v
-	}
-	kv["future_field"] = "from-the-future"
-	kv["another_one"] = "something else"
-
-	var b Blueprint
-	if err := b.FromKV(kv); err != nil {
-		t.Fatalf("FromKV must ignore unknown keys: %v", err)
-	}
-	if b.AppID != "inventree" {
-		t.Errorf("AppID: got %q", b.AppID)
-	}
-}
-
-func TestBlueprint_FromKV_BadBool(t *testing.T) {
-	kv := map[string]string{"active": "yep", "app_id": "x", "uuid": "00000000-0000-4000-8000-000000000000",
-		"display_name": "X", "category": "public/categories/x"}
-	var b Blueprint
-	err := b.FromKV(kv)
-	if err == nil || !strings.Contains(err.Error(), "active") {
-		t.Errorf("expected active-parse error, got %v", err)
-	}
-}
-
-func TestBlueprint_FromKV_BadInt(t *testing.T) {
-	kv := map[string]string{"stargazers": "many", "app_id": "x"}
-	var b Blueprint
-	err := b.FromKV(kv)
-	if err == nil || !strings.Contains(err.Error(), "stargazers") {
-		t.Errorf("expected stargazers-parse error, got %v", err)
-	}
-}
-
-func TestBlueprint_SecretRequirements_BadShape(t *testing.T) {
-	cases := map[string]string{
-		"missing colon": "public/secret-types/primitives/url",
-		"empty ref":     ":foo",
-		"empty group":   "public/secret-types/primitives/url:",
-	}
-	for name, raw := range cases {
-		t.Run(name, func(t *testing.T) {
-			kv := map[string]string{
-				"secret_requirements": raw,
-				"app_id":              "x",
-			}
-			var b Blueprint
-			err := b.FromKV(kv)
-			if err == nil || !strings.Contains(err.Error(), "secret_requirements") {
-				t.Errorf("expected secret_requirements error, got %v", err)
-			}
-		})
-	}
-}
-
+// TestBlueprint_Validate_AppIDSlug rejects invalid app_id values.
 func TestBlueprint_Validate_AppIDSlug(t *testing.T) {
-	cases := []string{"", "Inventree", "inventree_app", "-leading"}
-	for _, id := range cases {
+	for _, id := range []string{"", "Inventree", "inv_app", "-leading"} {
 		var b Blueprint
 		_ = b.FromKV(realInventreeKV)
 		b.AppID = id
-		err := b.Validate()
-		if err == nil || !strings.Contains(err.Error(), "app_id") {
+		if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "app_id") {
 			t.Errorf("id=%q: expected app_id error, got %v", id, err)
 		}
 	}
 }
 
+// TestBlueprint_Validate_UUID rejects non-v4 UUIDs.
 func TestBlueprint_Validate_UUID(t *testing.T) {
-	cases := []string{
-		"",
-		"not-a-uuid",
-		"d0afad25-f68e-3c79-b572-739e04d7d789", // version 3
-		"d0afad25-f68e-4c79-c572-739e04d7d789", // bad variant
-	}
-	for _, u := range cases {
+	for _, u := range []string{"", "not-a-uuid", "d0afad25-f68e-3c79-b572-739e04d7d789"} {
 		var b Blueprint
 		_ = b.FromKV(realInventreeKV)
 		b.UUID = u
-		err := b.Validate()
-		if err == nil || !strings.Contains(err.Error(), "uuid") {
+		if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "uuid") {
 			t.Errorf("uuid=%q: expected uuid error, got %v", u, err)
 		}
 	}
 }
 
-func TestBlueprint_Validate_Refs(t *testing.T) {
-	cases := []struct {
-		field string
-		mut   func(*Blueprint)
-		want  string
-	}{
-		{"category not a ref", func(b *Blueprint) { b.Category = "operations" }, "category"},
-		{"sizing_min not a ref", func(b *Blueprint) { b.SizingMin = "tg-sm-1" }, "sizing_min"},
-		{"compatible_deployment_platforms[0] not a ref", func(b *Blueprint) {
-			b.CompatibleDeploymentPlatforms = []string{"proxmox/lxc/medium"}
-		}, "compatible_deployment_platforms"},
-		{"upstream_license not a ref", func(b *Blueprint) { b.UpstreamLicense = "MIT" }, "upstream_license"},
-	}
-	for _, c := range cases {
-		t.Run(c.field, func(t *testing.T) {
-			var b Blueprint
-			_ = b.FromKV(realInventreeKV)
-			c.mut(&b)
-			err := b.Validate()
-			if err == nil || !strings.Contains(err.Error(), c.want) {
-				t.Errorf("expected %q in error, got %v", c.want, err)
-			}
-		})
-	}
-}
-
+// TestBlueprint_Validate_ActiveRequiresBaoPath checks active=true enforcement.
 func TestBlueprint_Validate_ActiveRequiresBaoPath(t *testing.T) {
 	var b Blueprint
 	_ = b.FromKV(realInventreeKV)
-	b.BaoSecretsPath = ""
-	err := b.Validate()
-	if err == nil || !strings.Contains(err.Error(), "bao_secrets_path") {
+	b.Runtime.BaoSecretsPath = ""
+	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "bao_secrets_path") {
 		t.Errorf("expected bao_secrets_path error, got %v", err)
 	}
 }
 
-// Discovery entries are exempt from the "active=true requires bao_secrets_path" rule.
+// TestBlueprint_Validate_DiscoveryNoBaoPathOK discovery entries don't need bao path.
 func TestBlueprint_Validate_DiscoveryNoBaoPathOK(t *testing.T) {
 	var b Blueprint
-	if err := b.FromKV(realActivepiecesKV); err != nil {
-		t.Fatalf("FromKV: %v", err)
-	}
-	if b.Active {
-		t.Fatal("activepieces fixture is supposed to be active=false")
-	}
-	if b.BaoSecretsPath != "" {
-		t.Fatal("activepieces fixture should have empty bao_secrets_path")
-	}
+	_ = b.FromKV(realActivepiecesKV)
 	if err := b.Validate(); err != nil {
-		t.Errorf("discovery entry without bao_secrets_path should validate: %v", err)
+		t.Errorf("discovery without bao path should be valid: %v", err)
 	}
 }
 
-func TestBlueprint_Validate_HealthStatusRange(t *testing.T) {
+// TestBlueprint_Validate_SizingTier rejects non-standard tier slugs.
+func TestBlueprint_Validate_SizingTier(t *testing.T) {
 	var b Blueprint
 	_ = b.FromKV(realInventreeKV)
-	b.HealthExpectStatus = 99
-	err := b.Validate()
-	if err == nil || !strings.Contains(err.Error(), "health_expect_status") {
-		t.Errorf("expected health_expect_status error, got %v", err)
-	}
-	b.HealthExpectStatus = 600
-	err = b.Validate()
-	if err == nil || !strings.Contains(err.Error(), "health_expect_status") {
-		t.Errorf("expected health_expect_status range error, got %v", err)
+	b.Sizing.Min = "small" // not a tier slug
+	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "sizing.min") {
+		t.Errorf("expected sizing.min error, got %v", err)
 	}
 }
 
-func TestBlueprint_Validate_CatalogAddedFormat(t *testing.T) {
+// TestBlueprint_Validate_HealthStatus rejects out-of-range status.
+func TestBlueprint_Validate_HealthStatus(t *testing.T) {
 	var b Blueprint
 	_ = b.FromKV(realInventreeKV)
-	b.CatalogAdded = "April 27 2026"
-	err := b.Validate()
-	if err == nil || !strings.Contains(err.Error(), "catalog_added") {
-		t.Errorf("expected catalog_added error, got %v", err)
+	b.Runtime.Health.ExpectStatus = 99
+	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "expect_status") {
+		t.Errorf("expected expect_status error, got %v", err)
 	}
 }

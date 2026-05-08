@@ -36,7 +36,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 )
 
@@ -188,18 +187,6 @@ func (s *Substrate) EffectiveBinds() []Bind {
 
 // ----- validation -----
 
-// Various names in our system are slug-shaped: lowercase, alphanumerics +
-// dashes, no leading/trailing dash. tenant/app/deployment all use this.
-var slugPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
-// zitiIdentityPattern matches the controller's machine identity naming
-// convention. Mirrors the regex in ziti-base's BaoBundleHandler so a
-// substrate authored against an arbitrary identity is rejected.
-var zitiIdentityPattern = regexp.MustCompile(`^machine-[0-9a-f]{8}$`)
-
-// hostnamePattern is a permissive .tango hostname matcher: one or more
-// labels separated by dots, ending in .tango. Labels are slug-shaped.
-var hostnamePattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+tango$`)
 
 // Validate returns nil if s is internally consistent and within the
 // MVP's accepted shape. Errors are informative; an operator should be
