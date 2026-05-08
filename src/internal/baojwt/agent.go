@@ -30,6 +30,23 @@ type AgentConfig struct {
 	Deployment   string `json:"deployment,omitempty"`
 	Flavor       string `json:"flavor,omitempty"`
 	ZitiIdentity string `json:"ziti_identity,omitempty"`
+	// ZitiIdentityPath is the path to the Ziti identity file used for the
+	// data plane (hosting overlay services, ZitiHost.BindHTTPService).
+	// Separate from the Bao identity (/etc/schmutz/identity.json) which is
+	// used only for certificate-based auth to Bao.
+	// On hosts with an existing ziti-edge-tunnel identity, this points to
+	// /etc/ziti/machine-*.json. Defaults to /etc/schmutz/identity.json.
+	ZitiIdentityPath string `json:"ziti_identity_path,omitempty"`
+}
+
+// EffectiveZitiIdentityPath returns the Ziti identity file path to use for
+// data plane operations. If ZitiIdentityPath is set explicitly it is used;
+// otherwise falls back to schmutzDir/identity.json.
+func (a *AgentConfig) EffectiveZitiIdentityPath(schmutzDir string) string {
+	if a.ZitiIdentityPath != "" {
+		return a.ZitiIdentityPath
+	}
+	return filepath.Join(schmutzDir, "identity.json")
 }
 
 // Validate fails fast on a config that's missing fields the refresh loop

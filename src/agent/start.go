@@ -1,23 +1,59 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 )
+
+// zitiIdentityPath returns the Ziti identity to use for data plane operations.
+//
+// Resolution order:
+//  1. agent.json's ziti_identity_path — explicit operator override.
+//  2. /etc/ziti/machine-*.json — operational tunnel identity from ziti-edge-tunnel.
+//  3. <schmutzDir>/identity.json — hub-enrolled identity.
+//
+// The Bao identity (schmutzDir/identity.json) is used separately for the
+// bao-jwt flow regardless of which identity is chosen here.
+func (a *Agent) zitiIdentityPath() string {
+	identityPath, _ := a.root.IdentityPath()
+	schmutzDir := filepath.Dir(identityPath)
+
+	if pinned := readPinnedZitiIdentityPath(filepath.Join(schmutzDir, "agent.json")); pinned != "" {
+		return pinned
+	}
+	return resolveZitiIdentityPath(schmutzDir)
+}
+
+// readPinnedZitiIdentityPath does a permissive read of agent.json, looking
+// only for a ziti_identity_path field. Any error (file missing, malformed
+// JSON, field empty) returns "" to fall through to auto-detect. baojwt's
+// LoadAgentConfig is too strict here — it validates the full Bao bundle,
+// which is not yet present on hosts that haven't completed bao-enroll.
+func readPinnedZitiIdentityPath(agentJSONPath string) string {
+	data, err := os.ReadFile(agentJSONPath)
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		ZitiIdentityPath string `json:"ziti_identity_path"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	return cfg.ZitiIdentityPath
+}
 
 // StartService creates a ZitiHost for the given ServiceRequest, binds all
 // listed Ziti services, and registers the host with the agent manager.
 //
-// Service names in req.Services must follow the "<protocol>-<slug>" pattern
-// (e.g. "ssh-web-1"). Unknown prefixes are skipped with a log line.
-// Returns an error if no services could be bound.
+// Uses the operational Ziti identity (auto-detected) for the data plane,
+// not the Bao identity. On LAN hosts this is /etc/ziti/machine-*.json;
+// on cloud hosts it falls back to /etc/schmutz/identity.json.
 func (a *Agent) StartService(req *ServiceRequest) error {
-	identityPath, err := a.root.IdentityPath()
-	if err != nil {
-		return err
-	}
-
-	host, err := NewZitiHost(identityPath)
+	host, err := NewZitiHost(a.zitiIdentityPath())
 	if err != nil {
 		return fmt.Errorf("start service %s: %w", req.Name, err)
 	}
@@ -42,11 +78,7 @@ func (a *Agent) StartService(req *ServiceRequest) error {
 // serves the given HTTP handler directly on the Ziti listener.
 // Used by the embedded gateway to expose schmutz-api.{zone} over the overlay.
 func (a *Agent) StartHTTPService(serviceName string, handler http.Handler) error {
-	identityPath, err := a.root.IdentityPath()
-	if err != nil {
-		return err
-	}
-	host, err := NewZitiHost(identityPath)
+	host, err := NewZitiHost(a.zitiIdentityPath())
 	if err != nil {
 		return fmt.Errorf("start http service %s: %w", serviceName, err)
 	}
