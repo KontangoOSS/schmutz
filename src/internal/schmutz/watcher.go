@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/KontangoOSS/schmutz/internal/shared"
@@ -84,6 +86,10 @@ func NewWatcher(cfg WatcherConfig) *Watcher {
 // Run drives the watcher. Polls once at startup, then every Interval
 // thereafter. Returns nil when ctx is cancelled. A failed poll does NOT
 // stop the loop — the next tick retries.
+//
+// Sending SIGHUP to the process triggers an immediate re-poll without
+// waiting for the next interval — useful after an operator runs
+// POST /api/v1/sync to push a config change from git.
 func (w *Watcher) Run(ctx context.Context) error {
 	w.logger.Printf("substrate: watcher starting (agent_json=%s token=%s interval=%s)",
 		w.cfg.AgentJSONPath, w.cfg.BaoTokenPath, w.cfg.Interval)
@@ -92,12 +98,20 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 	t := time.NewTicker(w.cfg.Interval)
 	defer t.Stop()
+
+	sighup := make(chan os.Signal, 1)
+	signal.Notify(sighup, syscall.SIGHUP)
+	defer signal.Stop(sighup)
+
 	for {
 		select {
 		case <-ctx.Done():
 			w.logger.Printf("substrate: watcher stopping (%v)", ctx.Err())
 			return nil
 		case <-t.C:
+			w.tick(ctx)
+		case <-sighup:
+			w.logger.Printf("substrate: SIGHUP received — re-polling immediately")
 			w.tick(ctx)
 		}
 	}
