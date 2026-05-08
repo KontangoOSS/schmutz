@@ -85,11 +85,10 @@ func TestRegisterHub_MissingRequiredFields(t *testing.T) {
 		cfg  HubEnrollConfig
 		want string
 	}{
-		{"missing controller", HubEnrollConfig{Token: "t", Tenant: "k", App: "a", Deployment: "d", IdentityPath: "/x", AgentJSONPath: "/y"}, "controller URL required"},
-		{"missing token", HubEnrollConfig{ControllerURL: "http://x", Tenant: "k", App: "a", Deployment: "d", IdentityPath: "/x", AgentJSONPath: "/y"}, "token required"},
-		{"missing tenant", HubEnrollConfig{ControllerURL: "http://x", Token: "t", App: "a", Deployment: "d", IdentityPath: "/x", AgentJSONPath: "/y"}, "tenant, app, deployment required"},
-		{"missing identity path", HubEnrollConfig{ControllerURL: "http://x", Token: "t", Tenant: "k", App: "a", Deployment: "d", AgentJSONPath: "/y"}, "identity path required"},
-		{"missing agent json", HubEnrollConfig{ControllerURL: "http://x", Token: "t", Tenant: "k", App: "a", Deployment: "d", IdentityPath: "/x"}, "agent.json path required"},
+		{"missing controller", HubEnrollConfig{Token: "t", IdentityPath: "/x", AgentJSONPath: "/y"}, "controller URL required"},
+		{"missing token", HubEnrollConfig{ControllerURL: "http://x", IdentityPath: "/x", AgentJSONPath: "/y"}, "token required"},
+		{"missing identity path", HubEnrollConfig{ControllerURL: "http://x", Token: "t", AgentJSONPath: "/y"}, "identity path required"},
+		{"missing agent json", HubEnrollConfig{ControllerURL: "http://x", Token: "t", IdentityPath: "/x"}, "agent.json path required"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

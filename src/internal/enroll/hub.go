@@ -124,9 +124,7 @@ func RegisterHub(ctx context.Context, cfg HubEnrollConfig) (*HubEnrollResult, er
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("enroll/hub: enrollment token required")
 	}
-	if cfg.Tenant == "" || cfg.App == "" || cfg.Deployment == "" {
-		return nil, fmt.Errorf("enroll/hub: tenant, app, deployment required")
-	}
+	// tenant/app/deployment are optional — the hub infers them from the token.
 	if cfg.IdentityPath == "" {
 		return nil, fmt.Errorf("enroll/hub: identity path required")
 	}
