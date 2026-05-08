@@ -85,14 +85,12 @@ func enrollCmd() *cobra.Command {
 
 Hub path (recommended — requires operator-issued enrollment token):
 
-  schmutz enroll \
-    --controller https://join.kontango.net \
-    --token enroll-XXXX \
-    --tenant kontango --app inventree --deployment prod-02
+  schmutz enroll --token enroll-XXXX
 
   The operator issues the token via POST /api/v1/enrollments.
   A single HTTP call to the hub over :443 ALPN returns both the Ziti
   identity and the Bao bundle. No WebSocket, no second connection.
+  The systemd service is installed and started automatically.
 
 Legacy path (schmutz-controller, kept for backward compatibility):
 
@@ -152,17 +150,14 @@ By enrolling you accept the Terms of Service: https://kontango.net/terms`,
 
 			// ---- Hub path ----
 			if token != "" {
-				if tenant == "" || app == "" || deployment == "" {
-					return fmt.Errorf("schmutz: --tenant, --app, --deployment required with --token")
-				}
 				if agentJSON == "" {
 					agentJSON = filepath.Join(schmutzDir, "agent.json")
 				}
 				info := collectDeviceInfo()
-				log.Printf("schmutz: hub enroll → %s (tenant=%s app=%s deployment=%s)",
-					r.ControllerURL(), tenant, app, deployment)
+				ctrlURL := r.ControllerURL()
+				log.Printf("schmutz: hub enroll → %s", ctrlURL)
 				result, err := enroll.RegisterHub(cmd.Context(), enroll.HubEnrollConfig{
-					ControllerURL: r.ControllerURL(),
+					ControllerURL: ctrlURL,
 					Token:         token,
 					Tenant:        tenant,
 					App:           app,
@@ -184,10 +179,22 @@ By enrolling you accept the Terms of Service: https://kontango.net/terms`,
 				if err := r.SetSlug(result.ZitiIdentityName); err != nil {
 					log.Printf("schmutz: warn: could not persist slug: %v", err)
 				}
-				log.Printf("schmutz: enrolled via hub (identity=%s)", result.ZitiIdentityName)
+				log.Printf("schmutz: enrolled (identity=%s)", result.ZitiIdentityName)
 				log.Printf("schmutz: identity written to %s", result.IdentityPath)
 				log.Printf("schmutz: bao config written to %s", result.AgentJSONPath)
-				log.Printf("schmutz: run 'schmutz start' to bind services and begin bao-token refresh")
+
+				// Auto-install the systemd service so the agent starts
+				// immediately and on every boot — no manual step needed.
+				if isRoot() {
+					if err := installService(result.BinaryPath); err != nil {
+						log.Printf("schmutz: warn: could not install service: %v", err)
+						log.Printf("schmutz: run 'schmutz install-service' manually to enable auto-start")
+					} else {
+						log.Printf("schmutz: service installed and started")
+					}
+				} else {
+					log.Printf("schmutz: run 'sudo schmutz install-service' to enable auto-start")
+				}
 				return nil
 			}
 
@@ -233,17 +240,17 @@ By enrolling you accept the Terms of Service: https://kontango.net/terms`,
 		},
 	}
 	// Common flags
-	cmd.Flags().StringVar(&controllerURL, "controller", "",
-		"hub or legacy controller URL (e.g. https://join.kontango.net or http://ziti-base.tango:8765)")
+	cmd.Flags().StringVar(&controllerURL, "controller", "https://enroll.kontango.net",
+		"hub URL (default: https://enroll.kontango.net)")
 	cmd.Flags().BoolVar(&force, "force", false, "re-enroll even if identity already exists")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "accept Terms of Service non-interactively")
 
 	// Hub path flags
 	cmd.Flags().StringVar(&token, "token", "",
-		"enrollment token from POST /api/v1/enrollments (hub path). When set, --tenant --app --deployment are required.")
-	cmd.Flags().StringVar(&tenant, "tenant", "", "tenant slug, e.g. kontango (hub path)")
-	cmd.Flags().StringVar(&app, "app", "", "application slug, e.g. inventree (hub path)")
-	cmd.Flags().StringVar(&deployment, "deployment", "", "deployment slug, e.g. prod-02 (hub path)")
+		"enrollment token from POST /api/v1/enrollments")
+	cmd.Flags().StringVar(&tenant, "tenant", "", "tenant slug (optional — inferred from token)")
+	cmd.Flags().StringVar(&app, "app", "", "application slug (optional — inferred from token)")
+	cmd.Flags().StringVar(&deployment, "deployment", "", "deployment slug (optional — inferred from token)")
 	cmd.Flags().StringVar(&agentJSON, "agent-json", "", "where to write bao agent config (default: /etc/schmutz/agent.json)")
 
 	// Legacy WebSocket path flags

@@ -186,6 +186,29 @@ func uninstallCmd() *cobra.Command {
 	return cmd
 }
 
+// installService writes the systemd unit for the given binary path and
+// enables + starts the service. Called automatically after hub enrollment.
+func installService(binPath string) error {
+	if binPath == "" {
+		var err error
+		binPath, err = os.Executable()
+		if err != nil {
+			return fmt.Errorf("locate binary: %w", err)
+		}
+	}
+	content := systemdUnitTemplate
+	content = strings.ReplaceAll(content, "{{BIN}}", binPath)
+	content = strings.ReplaceAll(content, "{{COMMAND}}", "start")
+	content = strings.ReplaceAll(content, "{{EXTRA}}", "")
+	if err := os.WriteFile(systemdUnitPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("write %s: %w", systemdUnitPath, err)
+	}
+	if err := runSystemctl("daemon-reload"); err != nil {
+		return err
+	}
+	return runSystemctl("enable", "--now", "schmutz.service")
+}
+
 // --- helpers ---
 
 func isRoot() bool { return os.Geteuid() == 0 }

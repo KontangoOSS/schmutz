@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/KontangoOSS/schmutz/internal/baojwt"
@@ -67,6 +68,7 @@ type HubEnrollResult struct {
 	ZitiIdentityName string
 	IdentityPath     string
 	AgentJSONPath    string
+	BinaryPath       string // absolute path of the running binary, for service install
 }
 
 // hubClaimRequest is what the agent POSTs to /api/v1/enroll.
@@ -215,9 +217,11 @@ func RegisterHub(ctx context.Context, cfg HubEnrollConfig) (*HubEnrollResult, er
 		return nil, fmt.Errorf("enroll/hub: install bao bundle: %w", err)
 	}
 
+	binPath, _ := os.Executable()
 	return &HubEnrollResult{
 		ZitiIdentityName: claimResp.ZitiIdentity.Name,
 		IdentityPath:     cfg.IdentityPath,
 		AgentJSONPath:    cfg.AgentJSONPath,
+		BinaryPath:       binPath,
 	}, nil
 }
