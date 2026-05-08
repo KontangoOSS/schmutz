@@ -430,12 +430,18 @@ T&C is considered accepted at install time when running via systemd.`,
 					if gwErr != nil {
 						log.Printf("gateway: start failed: %v — skipping", gwErr)
 					} else {
-						port := spec.API.EffectivePort()
+						svcName := "schmutz-api." + gatewayCfg.Zone
+						log.Printf("gateway: binding Ziti service %s", svcName)
 						go func() {
-							addr := fmt.Sprintf("127.0.0.1:%d", port)
-							log.Printf("gateway: serving on %s (zone: %s)", addr, gatewayCfg.Zone)
-							if err := http.ListenAndServe(addr, gwServer); err != nil {
-								log.Printf("gateway: listener error: %v", err)
+							if err := a.StartHTTPService(svcName, gwServer); err != nil {
+								// Fall back to localhost-only if Ziti bind fails
+								// (e.g. service not yet created on first run).
+								port := spec.API.EffectivePort()
+								addr := fmt.Sprintf("127.0.0.1:%d", port)
+								log.Printf("gateway: Ziti bind failed (%v) — falling back to %s", err, addr)
+								if lerr := http.ListenAndServe(addr, gwServer); lerr != nil {
+									log.Printf("gateway: listener error: %v", lerr)
+								}
 							}
 						}()
 					}

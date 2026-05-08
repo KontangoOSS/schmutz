@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"net/http"
 )
 
 // StartService creates a ZitiHost for the given ServiceRequest, binds all
@@ -32,6 +33,31 @@ func (a *Agent) StartService(req *ServiceRequest) error {
 		agent:   a,
 	}
 
+	go svc.monitor()
+	a.addService <- svc
+	return nil
+}
+
+// StartHTTPService creates a ZitiHost, binds the named Ziti service, and
+// serves the given HTTP handler directly on the Ziti listener.
+// Used by the embedded gateway to expose schmutz-api.{zone} over the overlay.
+func (a *Agent) StartHTTPService(serviceName string, handler http.Handler) error {
+	identityPath, err := a.root.IdentityPath()
+	if err != nil {
+		return err
+	}
+	host, err := NewZitiHost(identityPath)
+	if err != nil {
+		return fmt.Errorf("start http service %s: %w", serviceName, err)
+	}
+	if err := host.BindHTTPService(serviceName, handler); err != nil {
+		return fmt.Errorf("start http service %s: %w", serviceName, err)
+	}
+	svc := &service{
+		name:  serviceName,
+		host:  host,
+		agent: a,
+	}
 	go svc.monitor()
 	a.addService <- svc
 	return nil
