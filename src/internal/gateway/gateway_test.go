@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KontangoOSS/schmutz/internal/gateway"
@@ -101,5 +102,46 @@ func TestDiscover_GeneratesStubWhenNoSpec(t *testing.T) {
 	}
 	if len(entries[0].SpecJSON) == 0 {
 		t.Error("stub SpecJSON should not be empty")
+	}
+}
+
+func TestWriteSpecs_WritesToBao(t *testing.T) {
+	var written []string
+	baoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/v1/secret/data/") {
+			written = append(written, r.URL.Path)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"data":{}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer baoSrv.Close()
+
+	entries := []gateway.ServiceEntry{
+		{Name: "myapp", Port: 9090, SpecSource: "openapi",
+			SpecJSON: []byte(`{"openapi":"3.0.3","info":{"title":"T","version":"1"},"paths":{}}`)},
+	}
+
+	cfg := gateway.BaoWriteConfig{
+		BaoAddr:    baoSrv.URL,
+		BaoToken:   "test-token",
+		Tenant:     "kontango",
+		App:        "myapp",
+		Deployment: "prod-01",
+	}
+
+	if err := gateway.WriteSpecs(context.Background(), cfg, entries); err != nil {
+		t.Fatalf("WriteSpecs: %v", err)
+	}
+
+	found := false
+	for _, p := range written {
+		if strings.Contains(p, "apps/myapp/prod-01/api-spec") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected write to apps/myapp/prod-01/api-spec, got: %v", written)
 	}
 }
