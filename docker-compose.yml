@@ -1,11 +1,26 @@
 services:
 
+  # ── Caddy: single public port, full ALPN mux ─────────────────────────────
+  caddy:
+    image: schmutz-caddy:dev
+    ports:
+      - "443:443"     # only public port — ALPN mux handles everything
+    volumes:
+      - ./deploy/caddy/Caddyfile.compose:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ziti
+      - enroll
+      - controller
+    networks:
+      - schmutz
+
   # ── Ziti controller ──────────────────────────────────────────────────────
   ziti:
     image: openziti/ziti-controller:latest
-    ports:
-      - "1280:1280"   # edge management API (temp exposed for initial bootstrap)
-      - "6262:6262"   # enrollment
+    expose:
+      - "6262"    # enrollment + management (TLS, ALPN ziti-*)
     volumes:
       - ziti-data:/var/lib/ziti
     environment:
@@ -13,14 +28,16 @@ services:
       - ZITI_PWD=${ZITI_ADMIN_PASS:-Admin1234!}
       - ZITI_CTRL_ADVERTISED_ADDRESS=${ZITI_HOST:-localhost}
       - ZITI_CTRL_ADVERTISED_PORT=6262
+      - ZITI_CTRL_BIND_ADDRESS=0.0.0.0
+      - ZITI_CTRL_EDGE_BIND_PORT=6262
     networks:
       - schmutz
 
   # ── OpenBao ──────────────────────────────────────────────────────────────
   bao:
     image: openbao/openbao:latest
-    ports:
-      - "8200:8200"   # temp exposed for bootstrap
+    expose:
+      - "8200"
     cap_add:
       - IPC_LOCK
     environment:
@@ -33,8 +50,8 @@ services:
   # ── Forgejo (catalog + git) ───────────────────────────────────────────────
   forgejo:
     image: codeberg.org/forgejo/forgejo:10
-    ports:
-      - "3000:3000"   # temp exposed for bootstrap
+    expose:
+      - "3000"
     volumes:
       - forgejo-data:/data
     environment:
@@ -46,8 +63,8 @@ services:
   # ── Enroll server (hub API) ──────────────────────────────────────────────
   enroll:
     image: schmutz-enroll:dev
-    ports:
-      - "8765:8765"   # temp exposed for testing; behind Caddy in production
+    expose:
+      - "8765"
     environment:
       - LISTEN_ADDR=0.0.0.0:8765
       - BAO_ADDR=http://bao:8200
@@ -72,8 +89,15 @@ services:
   # ── Controller (management plane) ─────────────────────────────────────────
   controller:
     image: schmutz-controller:dev
-    ports:
-      - "3080:3080"   # debug/all-routes (temp exposed for testing)
+    expose:
+      - "3080"    # all-routes debug mux (container-internal only)
+      - "3081"    # ziti-admin.tango
+      - "3082"    # bao-admin.tango
+      - "3083"    # identity-admin.tango
+      - "3084"    # machine-api.tango
+      - "3085"    # metrics.tango
+      - "3086"    # catalog-api.tango
+      - "3087"    # security-api.tango
     environment:
       - LISTEN_ADDR=0.0.0.0:3080
       - BAO_ADDR=http://bao:8200
@@ -90,6 +114,8 @@ services:
     restart: on-failure
 
 volumes:
+  caddy-data:
+  caddy-config:
   ziti-data:
   forgejo-data:
 

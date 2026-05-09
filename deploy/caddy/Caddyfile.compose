@@ -1,12 +1,14 @@
 {
   admin off
-  # In compose, ACME isn't usable without a real domain.
-  # Use auto_https off for local testing; swap for acme_dns in production.
-  auto_https off
+
+  # For compose testing: use internal TLS (self-signed).
+  # For production: replace with acme_dns cloudflare <token>
+  # and set ZITI_CTRL_ADVERTISED_ADDRESS to the real hostname.
+  local_certs
 
   layer4 {
     :443 {
-      # Ziti control plane — ALPN-based routing
+      # Ziti control plane — routed before any HTTP/TLS handling
       @ziti-ctrl tls alpn ziti-ctrl
       route @ziti-ctrl {
         proxy ziti:6262
@@ -14,30 +16,30 @@
 
       @ziti-link tls alpn ziti-link
       route @ziti-link {
-        proxy ziti:10080
+        proxy ziti:6262
       }
 
       @ziti-edge tls alpn ziti-edge
       route @ziti-edge {
-        proxy ziti:3023
+        proxy ziti:6262
       }
 
-      # Enrollment hub — SNI based
+      # Enroll hub — agent enrollment and hub API
       @enroll tls sni enroll.*
       route @enroll {
         proxy enroll:8765
       }
 
-      # Controller management plane — SNI based
+      # Management plane — controller admin APIs
       @ctrl tls sni ctrl.*
       route @ctrl {
         proxy controller:3080
       }
 
-      # All other TLS → Ziti edge management API
+      # All other TLS falls through (catch-all)
       @tls-any tls
       route @tls-any {
-        proxy ziti:1280
+        proxy ziti:6262
       }
     }
   }
