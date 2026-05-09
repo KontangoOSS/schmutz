@@ -2,5 +2,6 @@ go 1.26
 
 use (
 	./agent
+	./enroll
 	./shared
 )

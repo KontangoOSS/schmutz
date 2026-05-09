@@ -1,0 +1,17 @@
+[Unit]
+Description=schmutz-server (admin API, overlay-only at admin.tango)
+After=network-online.target ziti-controller.service bao.service
+Wants=network-online.target
+Requires=ziti-controller.service bao.service
+Conflicts=schmutz-server@bootstrap.service
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=-/etc/kontango/schmutz-server.env
+ExecStart=/usr/local/bin/schmutz-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

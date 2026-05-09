@@ -1,0 +1,16 @@
+[Unit]
+Description=schmutz-server BOOTSTRAP MODE (one-time cluster setup)
+After=network-online.target
+Wants=network-online.target
+Conflicts=schmutz-server.service
+
+[Service]
+Type=simple
+User=root
+Environment=SCHMUTZ_BOOTSTRAP=1
+Environment=SCHMUTZ_LISTEN_ADDR=127.0.0.1:8766
+EnvironmentFile=-/etc/kontango/schmutz-server.env
+ExecStart=/usr/local/bin/schmutz-server
+# Bootstrap mode is operator-driven: starts when invoked, stops when
+# the operator runs `systemctl stop`. No automatic restart.
+RestartSec=5
