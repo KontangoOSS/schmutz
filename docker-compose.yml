@@ -33,17 +33,40 @@ services:
     networks:
       - schmutz
 
-  # ── OpenBao ──────────────────────────────────────────────────────────────
+  # ── OpenBao (Raft — durable, survives restarts) ──────────────────────────
+  # First boot: run `docker compose exec bao sh /etc/bao/init.sh`
+  # to initialize, unseal, and get the root token. Add it to .env as
+  # BAO_ROOT_TOKEN=<token>. On subsequent restarts Bao starts sealed;
+  # unseal automatically using the UNSEAL_KEY env var if set.
   bao:
     image: openbao/openbao:latest
     expose:
       - "8200"
+      - "8201"    # Raft peer port (used internally)
     cap_add:
       - IPC_LOCK
+    volumes:
+      - bao-data:/bao/data
+      - ./deploy/bao/config.compose.hcl:/etc/bao/config.hcl:ro
+      - ./deploy/bao/init.sh:/etc/bao/init.sh:ro
     environment:
-      - BAO_DEV_ROOT_TOKEN_ID=${BAO_ROOT_TOKEN:-dev-root-token}
-      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
-    command: server -dev
+      - BAO_ADDR=http://localhost:8200
+      # UNSEAL_KEY: set this after first init to auto-unseal on restart.
+      # WARNING: storing the unseal key in env is convenient for dev but
+      # not production-safe. For prod use Bao Transit auto-unseal or HSM.
+      - UNSEAL_KEY=${BAO_UNSEAL_KEY:-}
+    command: server -config=/etc/bao/config.hcl
+    # Auto-unseal on restart if UNSEAL_KEY is set
+    entrypoint: >
+      sh -c "
+        bao server -config=/etc/bao/config.hcl &
+        SERVER_PID=$$!
+        sleep 3
+        if [ -n \"$$UNSEAL_KEY\" ] && bao status 2>/dev/null | grep -q 'Sealed.*true'; then
+          bao operator unseal $$UNSEAL_KEY && echo 'bao: auto-unsealed'
+        fi
+        wait $$SERVER_PID
+      "
     networks:
       - schmutz
 
@@ -118,6 +141,7 @@ volumes:
   caddy-config:
   ziti-data:
   forgejo-data:
+  bao-data:         # Raft storage — persists across restarts
 
 networks:
   schmutz:
