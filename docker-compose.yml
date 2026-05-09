@@ -1,0 +1,98 @@
+services:
+
+  # ── Ziti controller ──────────────────────────────────────────────────────
+  ziti:
+    image: openziti/ziti-controller:latest
+    ports:
+      - "1280:1280"   # edge management API (temp exposed for initial bootstrap)
+      - "6262:6262"   # enrollment
+    volumes:
+      - ziti-data:/var/lib/ziti
+    environment:
+      - ZITI_USER=${ZITI_ADMIN_USER:-admin}
+      - ZITI_PWD=${ZITI_ADMIN_PASS:-Admin1234!}
+      - ZITI_CTRL_ADVERTISED_ADDRESS=${ZITI_HOST:-localhost}
+      - ZITI_CTRL_ADVERTISED_PORT=6262
+    networks:
+      - schmutz
+
+  # ── OpenBao ──────────────────────────────────────────────────────────────
+  bao:
+    image: openbao/openbao:latest
+    ports:
+      - "8200:8200"   # temp exposed for bootstrap
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - BAO_DEV_ROOT_TOKEN_ID=${BAO_ROOT_TOKEN:-dev-root-token}
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    command: server -dev
+    networks:
+      - schmutz
+
+  # ── Forgejo (catalog + git) ───────────────────────────────────────────────
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:10
+    ports:
+      - "3000:3000"   # temp exposed for bootstrap
+    volumes:
+      - forgejo-data:/data
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    networks:
+      - schmutz
+
+  # ── Enroll server (hub API) ──────────────────────────────────────────────
+  enroll:
+    image: schmutz-enroll:dev
+    ports:
+      - "8765:8765"   # temp exposed for testing; behind Caddy in production
+    environment:
+      - LISTEN_ADDR=0.0.0.0:8765
+      - BAO_ADDR=http://bao:8200
+      - BAO_TOKEN=${BAO_ROOT_TOKEN:-dev-root-token}
+      - BAO_SKIP_VERIFY=1
+      - ZITI_API=https://ziti:6262
+      - ZITI_USERNAME=${ZITI_ADMIN_USER:-admin}
+      - ZITI_PASSWORD=${ZITI_ADMIN_PASS:-Admin1234!}
+      - FORGEJO_URL=http://forgejo:3000
+      - FORGEJO_TOKEN=${FORGEJO_TOKEN:-}
+      - FORGEJO_ORG=public
+      - HUB_ADMIN_TOKEN=${HUB_ADMIN_TOKEN:-dev-admin-token}
+      - AGENT_BAO_ADDR=http://bao:8200
+    depends_on:
+      - bao
+      - ziti
+      - forgejo
+    networks:
+      - schmutz
+    restart: on-failure
+
+  # ── Controller (management plane) ─────────────────────────────────────────
+  controller:
+    image: schmutz-controller:dev
+    ports:
+      - "3080:3080"   # debug/all-routes (temp exposed for testing)
+    environment:
+      - LISTEN_ADDR=0.0.0.0:3080
+      - BAO_ADDR=http://bao:8200
+      - BAO_TOKEN=${BAO_ROOT_TOKEN:-dev-root-token}
+      - ZITI_CTRL_ADDR=ziti:6262
+      - ZITI_ADMIN_USER=${ZITI_ADMIN_USER:-admin}
+      - ZITI_ADMIN_PASS=${ZITI_ADMIN_PASS:-Admin1234!}
+      - NODE_NAME=compose-ctrl-1
+    depends_on:
+      - bao
+      - ziti
+    networks:
+      - schmutz
+    restart: on-failure
+
+volumes:
+  ziti-data:
+  forgejo-data:
+
+networks:
+  schmutz:
+    driver: bridge
