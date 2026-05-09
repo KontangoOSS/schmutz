@@ -1,0 +1,12 @@
+[Unit]
+Description=Socat proxy port 8091 -> NodePort 31810 (neverland)
+After=network.target k3s.service
+Wants=k3s.service
+
+[Service]
+ExecStart=/usr/bin/socat TCP-LISTEN:8091,fork,reuseaddr TCP:127.0.0.1:31810
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

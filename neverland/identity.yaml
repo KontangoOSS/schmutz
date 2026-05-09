@@ -1,0 +1,57 @@
+# Identity declaration for neverland
+#
+# This file declares WHO this application authenticates AS in the kontango identity
+# system. It is consumed by the bao-identity tooling to provision a corresponding
+# entity in OpenBao and a matching identity in OpenZiti.
+#
+# One identity per file. If this project has multiple identities (e.g., a server and
+# a runner), use additional files like `identity-<name>.yaml` and list them in
+# konfig.json under `files.identity`.
+#
+# Spec: https://docs.konoss.org/bao-identity/spec
+apiVersion: bao-identity/v1
+kind: Application                  # Application | Hardware | User
+
+metadata:
+  name: neverland
+  description: Tinkerbell management REST API
+
+# Bao entity definition — intrinsic facts about this thing
+entity:
+  # Namespace taxonomy:
+  #   applications  → app-level service entities (most things)
+  #   assets        → physical machines (hypervisors, controllers, routers,
+  #                   workstations) — registered + lifecycle-managed by Tinkerbell
+  #   kontango      → operational secrets shared across the platform
+  #   public        → public-facing config (rare)
+  namespace: applications          # applications | assets | kontango | public
+  kind: service                    # service | hardware | user
+  metadata:
+    purpose: Tinkerbell management REST API
+    # Add intrinsic facts here. Do NOT put access controls or relationships here —
+    # those are handled by `memberships` below.
+
+# How this entity authenticates to Bao
+auth:
+  method: approle                  # approle | cert | userpass
+  tier: infra                      # core | infra | user
+
+# Group memberships — the relationships that grant capabilities.
+# These translate to Ziti role-attributes via the JWT `memberships` claim.
+memberships:
+  - role-neverland-app
+  - setting-production
+
+# Secret access patterns — what Bao paths this identity can read/write
+secrets:
+  reads:
+    - applications/secret/apps/neverland/*
+  writes:
+    - applications/secret/apps/neverland/runtime/*
+
+# OpenZiti identity configuration
+ziti:
+  external_id: neverland           # must match Bao entity name
+  auth_policy: applications-auth   # which Ziti auth-policy this identity uses
+  attributes:                      # extra attributes (memberships are added automatically)
+    - kind-service

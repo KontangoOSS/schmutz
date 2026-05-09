@@ -1,0 +1,91 @@
+<h2>Zero-touch provisioning — full scope</h2>
+<p class="subtitle">Three sub-projects in dependency order. Each needs the one above it to exist first.</p>
+
+<div style="display:flex; flex-direction:column; gap:16px; margin-top:24px;">
+
+  <!-- Phase 1 -->
+  <div style="padding:20px; border-radius:8px; border:2px solid rgba(99,102,241,0.5); background:rgba(99,102,241,0.08);">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+      <div style="width:28px; height:28px; border-radius:50%; background:rgba(99,102,241,0.8); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">1</div>
+      <h3 style="margin:0;">Identity & naming standard</h3>
+      <span style="margin-left:auto; font-size:12px; padding:3px 10px; border-radius:20px; background:rgba(99,102,241,0.3);">Foundation</span>
+    </div>
+    <p style="margin:0 0 12px 0; opacity:0.8;">The taxonomy everything else depends on. Without this, SCIM pushes land in the wrong places and Ziti attributes don't map to anything.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Ziti</div>
+        <div>Attribute taxonomy<br><code style="font-size:11px;">#role-dev, #app-ticketarr</code></div>
+      </div>
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Zitadel</div>
+        <div>Group → role mapping<br><code style="font-size:11px;">group:developers → #role-dev</code></div>
+      </div>
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Bao</div>
+        <div>Policy path convention<br><code style="font-size:11px;">kontango/apps/{name}/</code></div>
+      </div>
+    </div>
+    <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Forgejo</div>
+        <div>Org/team structure matches Zitadel groups</div>
+      </div>
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Proxmox</div>
+        <div>Realm + role mapping from Zitadel groups</div>
+      </div>
+    </div>
+    <div style="margin-top:12px; font-size:12px; opacity:0.5;">Deliverable: a spec document + seed data in Bao catalog that all systems reference</div>
+  </div>
+
+  <!-- Phase 2 -->
+  <div style="padding:20px; border-radius:8px; border:2px solid rgba(16,185,129,0.5); background:rgba(16,185,129,0.08);">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+      <div style="width:28px; height:28px; border-radius:50%; background:rgba(16,185,129,0.8); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">2</div>
+      <h3 style="margin:0;">Approval workflow engine</h3>
+      <span style="margin-left:auto; font-size:12px; padding:3px 10px; border-radius:20px; background:rgba(16,185,129,0.3);">Orchestration</span>
+    </div>
+    <p style="margin:0 0 12px 0; opacity:0.8;">What fires when someone is approved. A sequential pipeline — each step confirms success before the next runs.</p>
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px;">
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">Decision engine<br><span style="opacity:0.5; font-size:11px;">flip approved=true</span></div>
+      <div style="opacity:0.4;">→</div>
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">Zitadel<br><span style="opacity:0.5; font-size:11px;">create user, assign groups</span></div>
+      <div style="opacity:0.4;">→</div>
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">SCIM push<br><span style="opacity:0.5; font-size:11px;">Forgejo + Proxmox</span></div>
+      <div style="opacity:0.4;">→</div>
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">Ziti attrs<br><span style="opacity:0.5; font-size:11px;">update identity</span></div>
+      <div style="opacity:0.4;">→</div>
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">Tinkerbell<br><span style="opacity:0.5; font-size:11px;">machine provisioning</span></div>
+      <div style="opacity:0.4;">→</div>
+      <div style="padding:8px 12px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.1);">Email<br><span style="opacity:0.5; font-size:11px;">notify user</span></div>
+    </div>
+    <div style="margin-top:12px; font-size:12px; opacity:0.5;">Lives in decision-engine or a new workflow service. Needs rollback/retry per step. NATS events at each stage.</div>
+  </div>
+
+  <!-- Phase 3 -->
+  <div style="padding:20px; border-radius:8px; border:2px solid rgba(245,158,11,0.5); background:rgba(245,158,11,0.08);">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+      <div style="width:28px; height:28px; border-radius:50%; background:rgba(245,158,11,0.8); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">3</div>
+      <h3 style="margin:0;">Browzer dashboard</h3>
+      <span style="margin-left:auto; font-size:12px; padding:3px 10px; border-radius:20px; background:rgba(245,158,11,0.3);">End-user surface</span>
+    </div>
+    <p style="margin:0 0 12px 0; opacity:0.8;">Post-approval view. The user sees only what they're assigned to — services and machines, nothing else.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Services panel</div>
+        <div>Ziti services bound to this user's groups — links, status, access method</div>
+      </div>
+      <div style="padding:10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+        <div style="opacity:0.5; margin-bottom:4px;">Machines panel</div>
+        <div>Enrolled devices assigned to this human — status, last seen, platform</div>
+      </div>
+    </div>
+    <div style="margin-top:12px; font-size:12px; opacity:0.5;">ziti-dash browzer plugin. Reads from Ziti + Bao catalog using the identity from phase 1.</div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px; padding:16px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.08); font-size:13px;">
+  <strong>Rough effort estimate</strong><br>
+  <span style="opacity:0.7;">Phase 1: 1-2 days (spec + seed data) · Phase 2: 3-5 days (workflow engine + SCIM wiring) · Phase 3: 1-2 days (dashboard plugin)</span>
+</div>

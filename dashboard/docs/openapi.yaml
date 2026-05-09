@@ -1,0 +1,1470 @@
+openapi: 3.1.0
+info:
+  title: Fabric API
+  version: 0.1.0
+  description: |
+    Fabric is the orchestration layer for the Kontango mesh network.
+    It provides a unified API over Ziti network management, identity
+    profiles, service configuration, access policies, secrets, routing,
+    and workflow execution.
+
+    Fabric doesn't replace the underlying tools — it composes them.
+    Each domain maps to one or more plugins that do the actual work.
+  contact:
+    name: Kontango
+    url: https://kontango.io
+
+servers:
+  - url: http://localhost:8088/api/v1
+    description: Local development
+  - url: https://fabric.kontango.io/api/v1
+    description: Production (via Browzer)
+
+tags:
+  - name: health
+    description: Service health and discovery
+  - name: mesh
+    description: Network topology — routers, regions, terminators
+  - name: identity
+    description: Machines, users, and service accounts on the network
+  - name: profiles
+    description: Identity templates stored in Bao
+  - name: services
+    description: Named network services
+  - name: policies
+    description: Access control rules — bind, dial, router access
+  - name: roles
+    description: The tag system — atomic labels on identities, services, routers
+  - name: secrets
+    description: Credential management via Bao
+  - name: auth
+    description: Authentication policies, OIDC providers, CAs
+  - name: routing
+    description: Traffic engineering — cost, precedence, strategy
+  - name: catalog
+    description: Raw Bao mesh catalog access
+  - name: workflows
+    description: Orchestrated multi-step operations
+  - name: registry
+    description: Plugin catalog — read-only index of available actions
+
+paths:
+  # ── Health ──────────────────────────────────────────────
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /version:
+    get:
+      tags: [health]
+      summary: Fabric and controller version
+      operationId: getVersion
+      responses:
+        "200":
+          description: Version info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fabric:
+                    type: string
+                    example: "0.1.0"
+                  controller:
+                    type: string
+                    example: "v2.0.0-pre5"
+
+  /plugins:
+    get:
+      tags: [health]
+      summary: List loaded BFF plugins
+      operationId: getPlugins
+      responses:
+        "200":
+          description: Loaded plugins
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PluginInfo"
+
+  /capabilities:
+    get:
+      tags: [health]
+      summary: All available operations grouped by domain
+      operationId: getCapabilities
+      responses:
+        "200":
+          description: Capability map
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+
+  # ── Mesh ────────────────────────────────────────────────
+  /mesh/status:
+    get:
+      tags: [mesh]
+      summary: Network overview
+      operationId: getMeshStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeshStatus"
+
+  /mesh/routers:
+    get:
+      tags: [mesh]
+      summary: List edge routers
+      operationId: listRouters
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Router"
+
+  /mesh/routers/{name}:
+    get:
+      tags: [mesh]
+      summary: Get router details
+      operationId: getRouter
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Router"
+    patch:
+      tags: [mesh]
+      summary: Update router
+      operationId: updateRouter
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouterUpdate"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Router"
+
+  /mesh/regions:
+    get:
+      tags: [mesh]
+      summary: List regions
+      operationId: listRegions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Region"
+
+  /mesh/terminators:
+    get:
+      tags: [mesh]
+      summary: List terminators
+      operationId: listTerminators
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Terminator"
+
+  # ── Identity ────────────────────────────────────────────
+  /identity/list:
+    get:
+      tags: [identity]
+      summary: List all identities
+      operationId: listIdentities
+      parameters:
+        - name: profile
+          in: query
+          schema:
+            type: string
+          description: Filter by profile name
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, degraded]
+          description: Filter by connection status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Identity"
+
+  /identity/{name}:
+    get:
+      tags: [identity]
+      summary: Get identity details
+      operationId: getIdentity
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+    delete:
+      tags: [identity]
+      summary: Delete identity and cleanup
+      operationId: deleteIdentity
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /identity/create:
+    post:
+      tags: [identity]
+      summary: Create identity with profile
+      operationId: createIdentity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+
+  /identity/{name}/promote:
+    post:
+      tags: [identity]
+      summary: Promote to next profile
+      operationId: promoteIdentity
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+
+  /identity/{name}/demote:
+    post:
+      tags: [identity]
+      summary: Demote to quarantine
+      operationId: demoteIdentity
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+
+  /identity/{name}/profile:
+    patch:
+      tags: [identity]
+      summary: Change identity profile
+      operationId: setIdentityProfile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile]
+              properties:
+                profile:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+
+  /identity/{name}/services:
+    get:
+      tags: [identity]
+      summary: List services this identity can reach
+      operationId: getIdentityServices
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+
+  /identity/{name}/policy-check:
+    get:
+      tags: [identity]
+      summary: Check effective policies
+      operationId: identityPolicyCheck
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyCheck"
+
+  # ── Profiles ────────────────────────────────────────────
+  /profiles:
+    get:
+      tags: [profiles]
+      summary: List all profiles
+      operationId: listProfiles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+    post:
+      tags: [profiles]
+      summary: Create profile
+      operationId: createProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+
+  /profiles/{name}:
+    get:
+      tags: [profiles]
+      summary: Get profile
+      operationId: getProfile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    put:
+      tags: [profiles]
+      summary: Update profile (propagates to all members)
+      operationId: updateProfile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreate"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    delete:
+      tags: [profiles]
+      summary: Delete profile
+      operationId: deleteProfile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /profiles/{name}/members:
+    get:
+      tags: [profiles]
+      summary: List identities with this profile
+      operationId: getProfileMembers
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Identity"
+
+  # ── Services ────────────────────────────────────────────
+  /services:
+    get:
+      tags: [services]
+      summary: List all services
+      operationId: listServices
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+    post:
+      tags: [services]
+      summary: Create service with configs and policies
+      operationId: createService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+
+  /services/{name}:
+    get:
+      tags: [services]
+      summary: Get service details
+      operationId: getService
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+    put:
+      tags: [services]
+      summary: Update service
+      operationId: updateService
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCreate"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+    delete:
+      tags: [services]
+      summary: Delete service and associated configs/policies
+      operationId: deleteService
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /services/{name}/terminators:
+    get:
+      tags: [services]
+      summary: Active terminators for this service
+      operationId: getServiceTerminators
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Terminator"
+
+  # ── Policies ────────────────────────────────────────────
+  /policies/service:
+    get:
+      tags: [policies]
+      summary: List service policies
+      operationId: listServicePolicies
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServicePolicy"
+    post:
+      tags: [policies]
+      summary: Create service policy
+      operationId: createServicePolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePolicyCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePolicy"
+
+  /policies/edge-router:
+    get:
+      tags: [policies]
+      summary: List edge router policies
+      operationId: listEdgeRouterPolicies
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeRouterPolicy"
+    post:
+      tags: [policies]
+      summary: Create edge router policy
+      operationId: createEdgeRouterPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EdgeRouterPolicyCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EdgeRouterPolicy"
+
+  # ── Roles ───────────────────────────────────────────────
+  /roles/identity:
+    get:
+      tags: [roles]
+      summary: List identity roles
+      operationId: listIdentityRoles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+
+  /roles/service:
+    get:
+      tags: [roles]
+      summary: List service roles
+      operationId: listServiceRoles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+
+  /roles/router:
+    get:
+      tags: [roles]
+      summary: List router roles
+      operationId: listRouterRoles
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+
+  # ── Secrets ─────────────────────────────────────────────
+  /secrets/list/{path}:
+    get:
+      tags: [secrets]
+      summary: List keys under a Bao path
+      operationId: listSecrets
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: string
+
+  /secrets/validate/{path}:
+    post:
+      tags: [secrets]
+      summary: Validate secret path exists with expected keys
+      operationId: validateSecret
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expected_keys:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  missing_keys:
+                    type: array
+                    items:
+                      type: string
+
+  # ── Auth ────────────────────────────────────────────────
+  /auth/policies:
+    get:
+      tags: [auth]
+      summary: List auth policies
+      operationId: listAuthPolicies
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuthPolicy"
+
+  /auth/jwt-signers:
+    get:
+      tags: [auth]
+      summary: List JWT signers
+      operationId: listJwtSigners
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JwtSigner"
+
+  # ── Routing ─────────────────────────────────────────────
+  /routing/strategies:
+    get:
+      tags: [routing]
+      summary: Available terminator strategies
+      operationId: listStrategies
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    description:
+                      type: string
+
+  # ── Catalog ─────────────────────────────────────────────
+  /catalog/tree:
+    get:
+      tags: [catalog]
+      summary: Full catalog tree
+      operationId: getCatalogTree
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Workflows ───────────────────────────────────────────
+  /workflows:
+    get:
+      tags: [workflows]
+      summary: List saved workflows
+      operationId: listWorkflows
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workflow"
+    post:
+      tags: [workflows]
+      summary: Save workflow
+      operationId: createWorkflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Workflow"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+  /workflows/{name}/compile/shell:
+    post:
+      tags: [workflows]
+      summary: Compile to bash script
+      operationId: compileWorkflowShell
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /workflows/{name}/compile/woodpecker:
+    post:
+      tags: [workflows]
+      summary: Compile to Woodpecker YAML
+      operationId: compileWorkflowWoodpecker
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/yaml:
+              schema:
+                type: string
+
+  # ── Registry ────────────────────────────────────────────
+  /registry/plugins:
+    get:
+      tags: [registry]
+      summary: List all plugins
+      operationId: listRegistryPlugins
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PluginManifest"
+
+  /registry/plugins/{name}:
+    get:
+      tags: [registry]
+      summary: Get plugin details
+      operationId: getRegistryPlugin
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginManifest"
+
+  /registry/actions:
+    get:
+      tags: [registry]
+      summary: Flat list of all actions
+      operationId: listRegistryActions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActionRef"
+
+# ── Schemas ─────────────────────────────────────────────
+components:
+  schemas:
+    PluginInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    MeshStatus:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            services:
+              type: integer
+            identities:
+              type: integer
+            terminators:
+              type: integer
+            apiSessions:
+              type: integer
+        routersOnline:
+          type: integer
+        routersTotal:
+          type: integer
+
+    Router:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        isOnline:
+          type: boolean
+        cost:
+          type: integer
+          minimum: 0
+          maximum: 65535
+        noTraversal:
+          type: boolean
+        disabled:
+          type: boolean
+        isTunnelerEnabled:
+          type: boolean
+        roleAttributes:
+          type: array
+          items:
+            type: string
+        hostname:
+          type: string
+
+    RouterUpdate:
+      type: object
+      properties:
+        cost:
+          type: integer
+        noTraversal:
+          type: boolean
+        disabled:
+          type: boolean
+        roleAttributes:
+          type: array
+          items:
+            type: string
+
+    Region:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        router:
+          type: string
+        roleAttribute:
+          type: string
+
+    Identity:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        profile:
+          type: string
+        roleAttributes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [online, offline, degraded]
+        hasApiSession:
+          type: boolean
+        hasEdgeRouterConnection:
+          type: boolean
+        defaultHostingCost:
+          type: integer
+        defaultHostingPrecedence:
+          type: string
+          enum: [default, required, failed]
+
+    IdentityCreate:
+      type: object
+      required: [name, profile]
+      properties:
+        name:
+          type: string
+        profile:
+          type: string
+          description: Profile name (join, standard, etc.)
+        externalId:
+          type: string
+          description: OIDC email for Browzer identities
+
+    Profile:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        identity_role:
+          type: string
+        edge_router_roles:
+          type: array
+          items:
+            type: string
+        service_bind_roles:
+          type: array
+          items:
+            type: string
+        service_dial_roles:
+          type: array
+          items:
+            type: string
+        promotes_to:
+          type: string
+        default_hosting_cost:
+          type: integer
+        default_hosting_precedence:
+          type: string
+          enum: [default, required, failed]
+        auth_policy:
+          type: string
+        heartbeat_enabled:
+          type: boolean
+        heartbeat_fallback:
+          type: string
+        terminator_strategy:
+          type: string
+        member_count:
+          type: integer
+
+    ProfileCreate:
+      type: object
+      required: [name, identity_role]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        identity_role:
+          type: string
+        edge_router_roles:
+          type: array
+          items:
+            type: string
+        service_bind_roles:
+          type: array
+          items:
+            type: string
+        service_dial_roles:
+          type: array
+          items:
+            type: string
+        promotes_to:
+          type: string
+        default_hosting_cost:
+          type: integer
+        default_hosting_precedence:
+          type: string
+        auth_policy:
+          type: string
+        heartbeat_enabled:
+          type: boolean
+        heartbeat_fallback:
+          type: string
+        terminator_strategy:
+          type: string
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        roleAttributes:
+          type: array
+          items:
+            type: string
+        encryptionRequired:
+          type: boolean
+        terminatorStrategy:
+          type: string
+        maxIdleTimeMillis:
+          type: integer
+
+    ServiceCreate:
+      type: object
+      required: [name, host, intercept]
+      properties:
+        name:
+          type: string
+        roleAttributes:
+          type: array
+          items:
+            type: string
+        encryptionRequired:
+          type: boolean
+          default: true
+        terminatorStrategy:
+          type: string
+          default: smartrouting
+        host:
+          type: object
+          description: host.v1 config
+          required: [protocol, address, port]
+          properties:
+            protocol:
+              type: string
+              enum: [tcp, udp]
+            address:
+              type: string
+            port:
+              type: integer
+            forwardPort:
+              type: boolean
+        intercept:
+          type: object
+          description: intercept.v1 config
+          required: [addresses, portRanges]
+          properties:
+            protocols:
+              type: array
+              items:
+                type: string
+              default: [tcp]
+            addresses:
+              type: array
+              items:
+                type: string
+            portRanges:
+              type: array
+              items:
+                type: object
+                properties:
+                  low:
+                    type: integer
+                  high:
+                    type: integer
+        bind_roles:
+          type: array
+          items:
+            type: string
+          description: Identity roles that can bind this service
+        dial_roles:
+          type: array
+          items:
+            type: string
+          description: Identity roles that can dial this service
+
+    ServicePolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Bind, Dial]
+        semantic:
+          type: string
+          enum: [AnyOf, AllOf]
+        identityRoles:
+          type: array
+          items:
+            type: string
+        serviceRoles:
+          type: array
+          items:
+            type: string
+        postureCheckRoles:
+          type: array
+          items:
+            type: string
+
+    ServicePolicyCreate:
+      type: object
+      required: [name, type, identityRoles, serviceRoles]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Bind, Dial]
+        semantic:
+          type: string
+          default: AnyOf
+        identityRoles:
+          type: array
+          items:
+            type: string
+        serviceRoles:
+          type: array
+          items:
+            type: string
+
+    EdgeRouterPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        semantic:
+          type: string
+        identityRoles:
+          type: array
+          items:
+            type: string
+        edgeRouterRoles:
+          type: array
+          items:
+            type: string
+
+    EdgeRouterPolicyCreate:
+      type: object
+      required: [name, identityRoles, edgeRouterRoles]
+      properties:
+        name:
+          type: string
+        semantic:
+          type: string
+          default: AnyOf
+        identityRoles:
+          type: array
+          items:
+            type: string
+        edgeRouterRoles:
+          type: array
+          items:
+            type: string
+
+    Role:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        current_count:
+          type: integer
+
+    AuthPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        primary:
+          type: object
+          properties:
+            updb:
+              type: object
+              properties:
+                allowed:
+                  type: boolean
+            cert:
+              type: object
+              properties:
+                allowed:
+                  type: boolean
+            extJwt:
+              type: object
+              properties:
+                allowed:
+                  type: boolean
+                allowedSigners:
+                  type: array
+                  items:
+                    type: string
+
+    JwtSigner:
+      type: object
+      properties:
+        name:
+          type: string
+        issuer:
+          type: string
+        audience:
+          type: string
+        claimsProperty:
+          type: string
+        enabled:
+          type: boolean
+
+    Terminator:
+      type: object
+      properties:
+        id:
+          type: string
+        service:
+          type: object
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+        router:
+          type: object
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+        binding:
+          type: string
+        address:
+          type: string
+        cost:
+          type: integer
+        precedence:
+          type: string
+          enum: [default, required, failed]
+        dynamicCost:
+          type: integer
+
+    PolicyCheck:
+      type: object
+      properties:
+        identity:
+          type: string
+        canDial:
+          type: array
+          items:
+            type: string
+        canBind:
+          type: array
+          items:
+            type: string
+        edgeRouters:
+          type: array
+          items:
+            type: string
+
+    Workflow:
+      type: object
+      required: [name, steps]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowStep"
+
+    WorkflowStep:
+      type: object
+      required: [id, plugin, action]
+      properties:
+        id:
+          type: string
+        plugin:
+          type: string
+        action:
+          type: string
+        creds_path:
+          type: string
+        inputs:
+          type: object
+          additionalProperties:
+            type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+
+    PluginManifest:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              category:
+                type: string
+
+    ActionRef:
+      type: object
+      properties:
+        plugin:
+          type: string
+        action:
+          type: string
+        description:
+          type: string

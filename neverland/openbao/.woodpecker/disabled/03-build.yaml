@@ -1,0 +1,101 @@
+# =============================================================================
+# Build & Push Container Image to Forgejo Registry
+# =============================================================================
+# Builds the Dockerfile from build/container/ and pushes to the Forgejo
+# container registry at git.konoss.org/APPORG/APPNAME.
+#
+# Tags:
+#   - latest         (main branch only)
+#   - <branch>       (branch name)
+#   - <short-sha>    (commit hash)
+#
+# Secrets required:
+#   - forgejo_username  (repo or global) — Forgejo registry username
+#   - forgejo_password  (repo or global) — Forgejo registry password/token
+# =============================================================================
+
+when:
+  - event: [push, pull_request]
+  - event: manual
+
+steps:
+  - name: detect-dockerfile
+    image: alpine:3.20
+    commands:
+      - |
+        set -e
+        echo "══════════════════════════════════════════"
+        echo "  Build: ${CI_REPO_NAME}"
+        echo "  Commit: ${CI_COMMIT_SHA:0:8}"
+        echo "══════════════════════════════════════════"
+
+        # Look for Dockerfile in order of preference
+        if [ -f build/container/Dockerfile ]; then
+          echo "DOCKERFILE=build/container/Dockerfile" > .build-env
+          echo "BUILD_CONTEXT=." >> .build-env
+          echo "  Found: build/container/Dockerfile"
+        elif [ -f Dockerfile ]; then
+          echo "DOCKERFILE=Dockerfile" > .build-env
+          echo "BUILD_CONTEXT=." >> .build-env
+          echo "  Found: Dockerfile"
+        else
+          echo "ERROR: No Dockerfile found in build/container/ or project root"
+          exit 1
+        fi
+
+        # Read registry info from konfig.json if available
+        if [ -f config/konfig.json ]; then
+          apk add --no-cache jq >/dev/null 2>&1
+          REGISTRY=$(jq -r '.registry // empty' config/konfig.json)
+          APP_NAME=$(jq -r '.name // empty' config/konfig.json)
+          if [ -n "$REGISTRY" ] && [ "$REGISTRY" != "APPORG/APPNAME" ]; then
+            echo "REGISTRY=$REGISTRY" >> .build-env
+          fi
+          if [ -n "$APP_NAME" ] && [ "$APP_NAME" != "APPNAME" ]; then
+            echo "APP_NAME=$APP_NAME" >> .build-env
+          fi
+        fi
+
+        cat .build-env
+
+  - name: build-and-push
+    image: woodpeckerci/plugin-docker-buildx:5
+    settings:
+      repo: git.konoss.org/${CI_REPO_OWNER}/${CI_REPO_NAME}
+      registry: git.konoss.org
+      dockerfile: build/container/Dockerfile
+      username:
+        from_secret: forgejo_username
+      password:
+        from_secret: forgejo_password
+      tag:
+        - latest
+        - ${CI_COMMIT_BRANCH}
+        - ${CI_COMMIT_SHA:0:8}
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - branch: main
+        event: push
+      - event: manual
+
+  - name: build-only
+    image: woodpeckerci/plugin-docker-buildx:5
+    settings:
+      repo: git.konoss.org/${CI_REPO_OWNER}/${CI_REPO_NAME}
+      registry: git.konoss.org
+      dockerfile: build/container/Dockerfile
+      username:
+        from_secret: forgejo_username
+      password:
+        from_secret: forgejo_password
+      dry_run: true
+      tag:
+        - ${CI_COMMIT_BRANCH}
+        - ${CI_COMMIT_SHA:0:8}
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: pull_request

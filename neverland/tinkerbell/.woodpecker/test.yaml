@@ -1,0 +1,254 @@
+when:
+  - event: push
+    branch: main
+  - event: manual
+
+steps:
+
+  # ── 0. Preflight: verify secrets and connectivity ────────────────────────
+  - name: preflight
+    image: git.konoss.org/plugins/plugins-preflight:latest
+    pull: true
+    environment:
+      PLUGIN_ACTION: check-all
+      PLUGIN_SECRETS: BAO_TOKEN
+      PLUGIN_ENDPOINTS: "https://10.11.30.119:8200/v1/sys/health,https://pmx.konoss.org/api2/json/version,http://10.11.30.116:9000"
+      BAO_TOKEN:
+        from_secret: BAO_TOKEN
+
+  # ── 1. Lint: basic validation of repo files ──────────────────────────────
+  - name: lint
+    image: git.konoss.org/plugins/plugins-lint:latest
+    pull: true
+    environment:
+      PLUGIN_ACTION: all
+      PLUGIN_PATH: .
+      PLUGIN_FAIL_ON_ERROR: "true"
+    depends_on: [preflight]
+
+  # ── 2a. Docs rebuild: trigger mkdocs site rebuild ────────────────────────
+  #
+  # MkDocs uses the multirepo plugin to pull docs from each repo at build
+  # time. This step just triggers a rebuild so changes are picked up.
+  # Runs in parallel with load-secrets.
+  #
+  - name: docs-rebuild
+    image: alpine:3.20
+    commands:
+      - apk add --no-cache -q curl
+      - |
+        if [ -d "docs" ] && [ -f "mkdocs.yml" ]; then
+          echo "docs/ and mkdocs.yml found — triggering mkdocs rebuild"
+          CODE=$(curl -sk -X POST \
+            -H "X-Sync-Token: mkdocs-sync-2026" \
+            -o /dev/null -w '%{http_code}' \
+            http://10.11.30.116:9000/webhook)
+          if [ "$CODE" = "200" ]; then
+            echo "MkDocs rebuild triggered successfully"
+          else
+            echo "WARN: MkDocs rebuild returned HTTP $CODE (non-fatal)"
+          fi
+        else
+          echo "No docs/ or mkdocs.yml — skipping rebuild"
+        fi
+    depends_on: [lint]
+
+  # ── 2b. Load secrets from OpenBao ────────────────────────────────────────
+  #
+  # Fetches into .secrets.env:
+  #   ${CI_REPO_NAME}/deploy/lxc   → PVE_NODE, OS_TEMPLATE, CPU, RAM_MB, DISK_GB, STORAGE, UNPRIVILEGED, FEATURES
+  #   infra/proxmox/cluster        → PVE_API_URL, PVE_API_TOKEN_ID, PVE_API_TOKEN_SECRET
+  # Also provisions SSH keypair at ${CI_REPO_NAME}/deploy/ssh if missing
+  #
+  - name: load-secrets
+    image: git.konoss.org/kreate/woodpecker-bao-plugin:latest
+    pull: true
+    environment:
+      PLUGIN_BAO_TOKEN:
+        from_secret: BAO_TOKEN
+      PLUGIN_BAO_ADDR: https://10.11.30.119:8200
+      PLUGIN_SKIP_TLS: "true"
+      PLUGIN_PATHS: '["secret/${CI_REPO_NAME}/deploy/lxc","secret/infra/proxmox/cluster"]'
+      PLUGIN_SSH_KEY_PATH: secret/${CI_REPO_NAME}/deploy/ssh
+    depends_on: [lint]
+
+  # ── 3a. Provision scoped PVE API token ────────────────────────────────
+  #
+  # Creates a least-privilege PVE token for this app if one doesn't exist
+  # in Bao. Token is scoped to only manage this app's LXCs.
+  # Uses the admin token from load-secrets to bootstrap, then stores the
+  # scoped token back in Bao for future runs.
+  #
+  - name: provision-pve-token
+    image: git.konoss.org/plugins/plugins-proxmox:latest
+    pull: true
+    commands:
+      - . .secrets.env
+      - |
+        PLUGIN_ACTION=ci-provision-token \
+        PLUGIN_API_URL="$PVE_API_URL" \
+        PLUGIN_API_TOKEN="$PVE_API_TOKEN_ID=$PVE_API_TOKEN_SECRET" \
+        PLUGIN_NODE="$PVE_NODE" \
+        PLUGIN_APP_NAME="${CI_REPO_NAME}" \
+        PLUGIN_BAO_ADDR="https://10.11.30.119:8200" \
+        PLUGIN_BAO_TOKEN="$BAO_TOKEN" \
+        PLUGIN_SKIP_VERIFY="true" \
+        bash /plugin/plugin.sh
+
+        # Source the output to get the scoped token
+        [ -f .env ] && cat .env >> .secrets.env
+    environment:
+      BAO_TOKEN:
+        from_secret: BAO_TOKEN
+    depends_on: [load-secrets]
+
+  # ── 3b. Create test LXC (auto-increment VMID) ──────────────────────────
+  - name: create-lxc
+    image: git.konoss.org/plugins/plugins-proxmox:latest
+    commands:
+      - . .secrets.env
+      - |
+        set -e
+        # Use scoped CI token if provisioned, otherwise fall back to admin token
+        if [ -n "${PVE_CI_TOKEN:-}" ]; then
+          AUTH="PVEAPIToken=$PVE_CI_TOKEN"
+          echo "Using scoped CI token: ${PVE_CI_TOKEN_ID:-}"
+        else
+          AUTH="PVEAPIToken=$PVE_API_TOKEN_ID=$PVE_API_TOKEN_SECRET"
+          echo "WARN: Using admin token — scoped token not available"
+        fi
+        API="$PVE_API_URL/api2/json"
+
+        # ── Verify API connectivity ──────────────────────────────────
+        echo "Verifying Proxmox API connectivity..."
+        API_VERSION=$(curl -sk -H "Authorization: $AUTH" "$API/version" | jq -r '.data.version // empty')
+        if [ -z "$API_VERSION" ]; then
+          echo "ERROR: Cannot reach Proxmox API at $PVE_API_URL"
+          exit 1
+        fi
+        echo "Proxmox API: v$API_VERSION"
+
+        # ── Verify target node exists and is online ──────────────────
+        NODE_STATUS=$(curl -sk -H "Authorization: $AUTH" "$API/nodes/$PVE_NODE/status" | jq -r '.data.uptime // empty')
+        if [ -z "$NODE_STATUS" ]; then
+          echo "ERROR: Node $PVE_NODE not found or offline"
+          exit 1
+        fi
+        echo "Node $PVE_NODE: online (uptime ${NODE_STATUS}s)"
+
+        # ── Verify OS template exists ────────────────────────────────
+        TEMPLATE_EXISTS=$(curl -sk -H "Authorization: $AUTH" \
+          "$API/nodes/$PVE_NODE/storage/local/content?content=vztmpl" \
+          | jq -r "[.data[] | select(.volid == \"$OS_TEMPLATE\")] | length")
+        if [ "$TEMPLATE_EXISTS" = "0" ]; then
+          echo "ERROR: OS template $OS_TEMPLATE not found on $PVE_NODE"
+          exit 1
+        fi
+        echo "Template: $OS_TEMPLATE (found)"
+
+        # ── Find next available VMID ─────────────────────────────────
+        RESOURCES=$(curl -sk -H "Authorization: $AUTH" "$API/cluster/resources")
+        MAX_VMID=$(echo "$RESOURCES" | jq '[.data[] | select(.vmid != null) | .vmid] | max // 999')
+        TEST_VMID=$(( MAX_VMID + 1 ))
+        echo "export TEST_VMID=$TEST_VMID" >> .secrets.env
+        echo "Provisioning VMID $TEST_VMID on $PVE_NODE (max existing: $MAX_VMID)"
+
+        # ── Create the LXC ───────────────────────────────────────────
+        PLUGIN_ACTION=lxc-create \
+        PLUGIN_API_URL="$PVE_API_URL" \
+        PLUGIN_API_TOKEN="$PVE_API_TOKEN_ID=$PVE_API_TOKEN_SECRET" \
+        PLUGIN_NODE="$PVE_NODE" \
+        PLUGIN_VMID="$TEST_VMID" \
+        PLUGIN_HOSTNAME="test-$TEST_VMID" \
+        PLUGIN_OSTEMPLATE="$OS_TEMPLATE" \
+        PLUGIN_MEMORY="$RAM_MB" \
+        PLUGIN_CORES="$CPU" \
+        PLUGIN_ROOTFS_SIZE="$DISK_GB" \
+        PLUGIN_UNPRIVILEGED="$UNPRIVILEGED" \
+        PLUGIN_FEATURES="$FEATURES" \
+        PLUGIN_STORAGE="$STORAGE" \
+        PLUGIN_NETWORK="name=eth0,bridge=vmbr0,ip=dhcp" \
+        PLUGIN_START_ON_CREATE="true" \
+        bash /plugin/plugin.sh
+
+        # ── Wait for running state (up to 60s) ──────────────────────
+        echo "Waiting for VMID $TEST_VMID to start..."
+        for i in $(seq 1 12); do
+          sleep 5
+          STATUS=$(curl -sk -H "Authorization: $AUTH" \
+            "$API/nodes/$PVE_NODE/lxc/$TEST_VMID/status/current" \
+            | jq -r '.data.status // empty')
+          echo "  [$i/12] VMID $TEST_VMID: $STATUS"
+          [ "$STATUS" = "running" ] && break
+          [ "$i" = "12" ] && echo "ERROR: LXC did not reach running state" && exit 1
+        done
+        echo "LXC is running"
+
+        # ── Wait for networking (up to 30s) ──────────────────────────
+        echo "Waiting for network..."
+        for i in $(seq 1 6); do
+          sleep 5
+          IP=$(curl -sk -H "Authorization: $AUTH" \
+            "$API/nodes/$PVE_NODE/lxc/$TEST_VMID/interfaces" \
+            | jq -r '[.data[] | select(.name == "eth0") | .["ip-addresses"][]? | select(.["ip-address-type"] == "ipv4") | .["ip-address"]] | first // empty')
+          if [ -n "$IP" ]; then
+            echo "  Network up: eth0 = $IP"
+            echo "export TEST_IP=$IP" >> .secrets.env
+            break
+          fi
+          echo "  [$i/6] Waiting for DHCP..."
+          [ "$i" = "6" ] && echo "WARN: No IP assigned after 30s (DHCP may be slow)"
+        done
+
+        # ── Verify LXC config matches request ───────────────────────
+        echo "Verifying LXC config..."
+        CONFIG=$(curl -sk -H "Authorization: $AUTH" \
+          "$API/nodes/$PVE_NODE/lxc/$TEST_VMID/config")
+        ACTUAL_CORES=$(echo "$CONFIG" | jq -r '.data.cores // empty')
+        ACTUAL_MEM=$(echo "$CONFIG" | jq -r '.data.memory // empty')
+        echo "  Cores: $ACTUAL_CORES (requested: $CPU)"
+        echo "  Memory: ${ACTUAL_MEM}MB (requested: ${RAM_MB}MB)"
+        [ "$ACTUAL_CORES" != "$CPU" ] && echo "WARN: Core mismatch"
+        [ "$ACTUAL_MEM" != "$RAM_MB" ] && echo "WARN: Memory mismatch"
+        echo "VMID $TEST_VMID ready"
+    depends_on: [provision-pve-token]
+
+  # ── 4. Build ─────────────────────────────────────────────────────────────
+  - name: build
+    image: alpine:3.20
+    commands:
+      - . .secrets.env
+      - echo "Build step — target VMID $TEST_VMID on $PVE_NODE"
+      - echo "Replace this step with your actual build and deploy commands"
+    depends_on: [create-lxc]
+
+  # ── 5. Destroy test LXC ─────────────────────────────────────────────────
+  - name: destroy-lxc
+    image: git.konoss.org/plugins/plugins-proxmox:latest
+    commands:
+      - . .secrets.env
+      - |
+        set -e
+        echo "Destroying test VMID $TEST_VMID..."
+
+        PLUGIN_ACTION=lxc-destroy \
+        PLUGIN_API_URL="$PVE_API_URL" \
+        PLUGIN_API_TOKEN="$PVE_API_TOKEN_ID=$PVE_API_TOKEN_SECRET" \
+        PLUGIN_NODE="$PVE_NODE" \
+        PLUGIN_VMID="$TEST_VMID" \
+        bash /plugin/plugin.sh
+
+        # Confirm it's gone
+        STATUS=$(curl -sk \
+          -H "Authorization: PVEAPIToken=$PVE_API_TOKEN_ID=$PVE_API_TOKEN_SECRET" \
+          "$PVE_API_URL/api2/json/nodes/$PVE_NODE/lxc/$TEST_VMID/status/current" \
+          | jq -r '.data.status // "gone"')
+        [ "$STATUS" = "gone" ] && echo "VMID $TEST_VMID confirmed destroyed" || echo "WARN: VMID $TEST_VMID status: $STATUS"
+    depends_on: [build]
+    when:
+      - status: [success, failure]
+
+
+
+
+

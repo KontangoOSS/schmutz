@@ -1,0 +1,4 @@
+{"type":"server-started","port":55537,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:55537","screen_dir":"/home/leonardo/git/kore/ziti-dash/.superpowers/brainstorm/1986824-1777325671/content","state_dir":"/home/leonardo/git/kore/ziti-dash/.superpowers/brainstorm/1986824-1777325671/state"}
+{"type":"screen-added","file":"/home/leonardo/git/kore/ziti-dash/.superpowers/brainstorm/1986824-1777325671/content/identity-authority.html"}
+{"type":"screen-added","file":"/home/leonardo/git/kore/ziti-dash/.superpowers/brainstorm/1986824-1777325671/content/zero-touch-scope.html"}
+{"type":"server-stopped","reason":"idle timeout"}

@@ -1,0 +1,22 @@
+site_name: neverland
+site_description: >-
+  Tinkerbell management REST API. Wraps the Tinkerbell + Rufio Kubernetes
+  CRDs (Hardware, Template, Workflow, BMC) and the surrounding tink-system
+  services (smee, hegel, tink-server, hook artifacts) behind a stable HTTP
+  API consumable by neverland-web and operator tooling.
+
+docs_dir: docs
+
+nav:
+  - Overview: index.md
+  - Quickstart: QUICKSTART.md
+  - Checklist: CHECKLIST.md
+  - Guides:
+      - Architecture: guides/architecture.md
+      - Quickstart: guides/quickstart.md
+      - Runbook: guides/runbook.md
+      - Awesome Repo: guides/awesome-repo.md
+  - API:
+      - Overview: api/index.md
+      - Authentication: api/authentication.md
+  - Runbook: RUNBOOK.md

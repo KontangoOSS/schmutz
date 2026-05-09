@@ -1,0 +1,55 @@
+when:
+  - event: [push]
+    branch: main
+
+steps:
+  - name: fetch-secrets
+    image: git.konoss.org/kreate/woodpecker-phase-plugin:latest
+    settings:
+      phase_token:
+        from_secret: PHASE_SERVICE_TOKEN
+      host: https://phase.konoss.org
+      app: master
+      env: Production
+      paths:
+        - /ticketarr/
+
+  - name: create-docs-ticket
+    image: alpine:3.20
+    commands:
+      - apk add --no-cache curl jq
+      - |
+        . ./.secrets.env
+
+        # Authenticate with Ticketarr
+        TOKEN=$(curl -sf http://10.11.30.28:9090/api/auth/login \
+          -H "Content-Type: application/json" \
+          -d "{\"username\": \"admin\", \"password\": \"$${ADMIN_PASSWORD}\"}" \
+          | jq -r .access_token)
+
+        if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+          echo "Failed to authenticate with Ticketarr"
+          exit 1
+        fi
+
+        COMMIT_SHA=$(echo "${CI_COMMIT_SHA}" | cut -c1-7)
+        COMMIT_MSG=$(echo "${CI_COMMIT_MESSAGE}" | head -1 | cut -c1-80)
+
+        # Create ticket in DOC project
+        RESPONSE=$(curl -sf -X POST "http://10.11.30.28:9090/api/workspaces/28773a88-f804-4d2d-8c49-222822fe8e85/projects/d670c0d5-e8d8-4882-b81d-8ef53fa88dd8/tickets" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"title\": \"Sync docs: ${CI_REPO_NAME} @ ${COMMIT_SHA}\",
+            \"description\": \"A commit to **main** on **${CI_REPO_NAME}** requires a docs sync to the MKDocs site.\n\n**Commit:** \`${COMMIT_SHA}\`\n**Message:** ${COMMIT_MSG}\n**Repo:** ${CI_REPO_CLONE_URL}\n\n### Checklist\n- [ ] Sync docs from repo to kore/docs\n- [ ] Verify MKDocs site rebuilt\",
+            \"story_points\": 1,
+            \"type_id\": \"71930977-34fb-4dfd-b757-1b74ff56323f\",
+            \"priority_id\": \"a04f565b-5bb9-410f-891f-747006dabbc5\"
+          }")
+
+        TICKET_KEY=$(echo "$RESPONSE" | jq -r '.key // empty')
+        if [ -n "$TICKET_KEY" ]; then
+          echo "Created ticket $TICKET_KEY for ${CI_REPO_NAME} @ ${COMMIT_SHA}"
+        else
+          echo "Ticket created (response: $RESPONSE)"
+        fi

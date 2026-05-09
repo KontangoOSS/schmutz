@@ -1,0 +1,1220 @@
+openapi: 3.1.0
+info:
+  title: Neverland
+  description: Tinkerbell management gateway — REST API for bare-metal provisioning
+  version: 0.1.0
+servers:
+  - url: http://10.11.30.91:8091
+    description: LAN (k3s node)
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      tags: [System]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: neverland
+
+  /api/v1/hardware:
+    get:
+      summary: List all Hardware CRs
+      operationId: listHardware
+      tags: [Hardware]
+      responses:
+        "200":
+          description: List of Hardware objects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Hardware"
+    post:
+      summary: Register a new machine
+      operationId: createHardware
+      tags: [Hardware]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHardwareRequest"
+      responses:
+        "201":
+          description: Hardware created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hardware"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/hardware/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a Hardware CR
+      operationId: getHardware
+      tags: [Hardware]
+      responses:
+        "200":
+          description: Hardware object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hardware"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Merge-patch a Hardware CR
+      operationId: patchHardware
+      tags: [Hardware]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated Hardware
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a Hardware CR
+      operationId: deleteHardware
+      tags: [Hardware]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/hardware/{name}/netboot:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    post:
+      summary: Toggle PXE / workflow netboot flags on a machine
+      description: |
+        Updates `allowPXE` and/or `allowWorkflow` on the first interface of the Hardware CR.
+        Set `allowPXE: false` after an OS is installed to prevent the machine from PXE booting again.
+      operationId: netbootHardware
+      tags: [Hardware]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetbootRequest"
+      responses:
+        "200":
+          description: Updated netboot flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetbootStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Hardware has no interfaces
+
+  /api/v1/hardware/{name}/watch:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Watch hardware annotation changes (SSE)
+      description: |
+        Streams `update` events whenever the hardware object's annotations change.
+        Useful for watching enrollment state written by the kontango gate action
+        (`kontango.io/enrollment-state`, `kontango.io/enrollment-id`, etc).
+      operationId: watchHardware
+      tags: [Hardware]
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: "event: update\ndata: {\"name\":\"myhost\",\"annotations\":{\"kontango.io/enrollment-state\":\"approved\"}}\n\n"
+
+  /api/v1/templates:
+    get:
+      summary: List all Template CRs
+      operationId: listTemplates
+      tags: [Templates]
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Template"
+    post:
+      summary: Create a Template
+      operationId: createTemplate
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateRequest"
+      responses:
+        "201":
+          description: Template created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/templates/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a Template
+      operationId: getTemplate
+      tags: [Templates]
+      responses:
+        "200":
+          description: Template object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update a Template
+      operationId: patchTemplate
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a Template
+      operationId: deleteTemplate
+      tags: [Templates]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflows:
+    get:
+      summary: List all Workflows
+      operationId: listWorkflows
+      tags: [Workflows]
+      responses:
+        "200":
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Workflow"
+    post:
+      summary: Create a Workflow
+      operationId: createWorkflow
+      tags: [Workflows]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkflowRequest"
+      responses:
+        "201":
+          description: Workflow created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflows/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a Workflow with status
+      operationId: getWorkflow
+      tags: [Workflows]
+      responses:
+        "200":
+          description: Workflow object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update a Workflow
+      operationId: patchWorkflow
+      tags: [Workflows]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a Workflow
+      operationId: deleteWorkflow
+      tags: [Workflows]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflows/{name}/reprovision:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    post:
+      summary: Re-provision a machine (delete and recreate workflow)
+      operationId: reprovisionWorkflow
+      tags: [Workflows]
+      responses:
+        "201":
+          description: New workflow created
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflows/{name}/watch:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Watch workflow state changes (SSE)
+      operationId: watchWorkflow
+      tags: [Workflows]
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: "event: state_change\ndata: {\"name\":\"myhost\",\"state\":\"STATE_RUNNING\"}\n\n"
+
+  /api/v1/workflows/{name}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get per-action status for a workflow
+      description: |
+        Returns all actions across all tasks for a workflow, flattened with their
+        current status, timing, and messages. More granular than GET /workflows/{name}
+        which returns the overall workflow state.
+      operationId: getWorkflowTasks
+      tags: [Workflows]
+      responses:
+        "200":
+          description: Per-action task status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowTasksResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/artifacts:
+    get:
+      summary: List OS image artifacts
+      operationId: listArtifacts
+      tags: [Artifacts]
+      responses:
+        "200":
+          description: List of artifact files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArtifactInfo"
+    post:
+      summary: Upload an OS image
+      operationId: uploadArtifact
+      tags: [Artifacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Artifact uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  size:
+                    type: integer
+                  url:
+                    type: string
+
+  /api/v1/artifacts/fetch:
+    get:
+      summary: List all fetch jobs
+      operationId: listFetchJobs
+      tags: [Artifacts]
+      responses:
+        "200":
+          description: List of fetch jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FetchJob"
+    post:
+      summary: Fetch and convert an image from a URL into a Tinkerbell-ready raw.gz artifact
+      description: |
+        Downloads the image at `url`, detects its format, converts qcow2 → raw if needed,
+        then gzip-compresses it to `<name>.raw.gz` in the artifacts directory.
+        Returns immediately with a job ID — poll `GET /api/v1/artifacts/fetch/{id}` for status.
+
+        **Compatible source formats:** `.raw`, `.raw.gz` (passthrough), `.qcow2` (converted), `.img`
+        **Output:** always `.raw.gz` — plug the `outputURL` directly into a workflow's `IMG_URL`
+      operationId: startFetchJob
+      tags: [Artifacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FetchRequest"
+      responses:
+        "202":
+          description: Job accepted — poll for status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/artifacts/fetch/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get fetch job status
+      operationId: getFetchJob
+      tags: [Artifacts]
+      responses:
+        "200":
+          description: Fetch job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/artifacts/{filename}:
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Download an artifact (proxied from nginx)
+      operationId: downloadArtifact
+      tags: [Artifacts]
+      responses:
+        "200":
+          description: File content
+    delete:
+      summary: Delete an artifact
+      operationId: deleteArtifact
+      tags: [Artifacts]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/boot:
+    get:
+      summary: Get Smee boot configuration
+      operationId: getBoot
+      tags: [Boot]
+      responses:
+        "200":
+          description: Current boot config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootConfig"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update Smee boot configuration
+      operationId: patchBoot
+      tags: [Boot]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchBootRequest"
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/boot/ipxe/{mac}:
+    parameters:
+      - name: mac
+        in: path
+        required: true
+        schema:
+          type: string
+          example: bc:24:11:aa:bb:cc
+    get:
+      summary: Get generated iPXE boot script for a MAC address
+      operationId: getIPXEScript
+      tags: [Boot]
+      responses:
+        "200":
+          description: iPXE script
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/menu.ipxe:
+    get:
+      summary: Render the Kontango iPXE boot menu
+      description: |
+        Returns an iPXE script that displays a branded menu and chains to Hook OS.
+        Called by iPXE binaries embedded in Kontango boot ISOs/USBs.
+      tags: [Boot]
+      responses:
+        "200":
+          description: iPXE script
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  #!ipxe
+                  ...
+
+  /api/v1/beacon:
+    get:
+      summary: iPXE-format boot beacon (used by imgfetch)
+      description: |
+        Called by the iPXE menu via imgfetch. Query parameters carry the
+        fingerprint. Response is itself an iPXE script that sets
+        kontango_session_id, kontango_short_code, kontango_skip_claim.
+      tags: [Boot]
+      parameters:
+        - in: query
+          name: ipxe
+          required: true
+          schema: { type: integer, enum: [1] }
+        - in: query
+          name: mac
+          required: true
+          schema: { type: string }
+        - in: query
+          name: ip
+          schema: { type: string }
+        - in: query
+          name: arch
+          schema: { type: string, enum: [amd64, arm64] }
+        - in: query
+          name: platform
+          schema: { type: string, enum: [pcbios, efi] }
+        - in: query
+          name: userclass
+          schema: { type: string }
+      responses:
+        "200":
+          description: iPXE script with set commands
+          content:
+            text/plain:
+              schema: { type: string }
+    post:
+      summary: JSON boot beacon (used by Hook OS)
+      tags: [Boot]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level, fingerprint]
+              properties:
+                level:
+                  type: string
+                  enum: [ipxe, hook]
+                session_id:
+                  type: string
+                  format: uuid
+                fingerprint:
+                  type: object
+                  required: [mac]
+                  properties:
+                    mac:        { type: string }
+                    ip:         { type: string }
+                    arch:       { type: string }
+                    platform:   { type: string }
+                    userclass:  { type: string }
+                    hostname:   { type: string }
+                    dmi_serial: { type: string }
+                    dmi_uuid:   { type: string }
+                    cpu_id:     { type: string }
+                    memory_kb:  { type: integer }
+                    disk_count: { type: integer }
+                    tpm_present: { type: boolean }
+                    tpm_ek_pubkey: { type: string }
+      responses:
+        "200":
+          description: Beacon receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: { type: string, format: uuid }
+                  short_code: { type: string }
+                  claim_url:  { type: string, format: uri }
+                  skip_claim: { type: boolean }
+                  watch_url:  { type: string, format: uri }
+
+  /api/v1/downloads:
+    get:
+      summary: List bootable images
+      tags: [Boot]
+      responses:
+        "200":
+          description: Listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:     { type: string }
+                        size:     { type: integer }
+                        modified: { type: string, format: date-time }
+                        url:      { type: string }
+
+  /api/v1/downloads/{filename}:
+    get:
+      summary: Download a bootable image
+      tags: [Boot]
+      parameters:
+        - in: path
+          name: filename
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Binary file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { description: Not found }
+
+  /api/v1/bmc/machines:
+    get:
+      summary: List BMC machines
+      operationId: listBMCMachines
+      tags: [BMC]
+      responses:
+        "200":
+          description: List of machines
+    post:
+      summary: Register a BMC machine
+      operationId: createBMCMachine
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMachineRequest"
+      responses:
+        "201":
+          description: Machine created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/bmc/machines/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a BMC machine
+      operationId: getBMCMachine
+      tags: [BMC]
+      responses:
+        "200":
+          description: Machine object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update a BMC machine
+      operationId: patchBMCMachine
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a BMC machine
+      operationId: deleteBMCMachine
+      tags: [BMC]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/bmc/jobs:
+    get:
+      summary: List BMC jobs
+      operationId: listBMCJobs
+      tags: [BMC]
+      responses:
+        "200":
+          description: List of jobs
+    post:
+      summary: Create a BMC job
+      operationId: createBMCJob
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201":
+          description: Job created
+
+  /api/v1/bmc/jobs/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a BMC job
+      operationId: getBMCJob
+      tags: [BMC]
+      responses:
+        "200":
+          description: Job object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Merge-patch a BMC job
+      operationId: patchBMCJob
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated job
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a BMC job
+      operationId: deleteBMCJob
+      tags: [BMC]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/bmc/tasks:
+    get:
+      summary: List BMC tasks
+      operationId: listBMCTasks
+      tags: [BMC]
+      responses:
+        "200":
+          description: List of tasks
+    post:
+      summary: Create a BMC task
+      operationId: createBMCTask
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201":
+          description: Task created
+
+  /api/v1/bmc/tasks/{name}:
+    parameters:
+      - $ref: "#/components/parameters/name"
+    get:
+      summary: Get a BMC task
+      operationId: getBMCTask
+      tags: [BMC]
+      responses:
+        "200":
+          description: Task object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Merge-patch a BMC task
+      operationId: patchBMCTask
+      tags: [BMC]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated task
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a BMC task
+      operationId: deleteBMCTask
+      tags: [BMC]
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/menu/theme:
+    get:
+      summary: Current boot menu theme
+      description: |
+        Returns the live theme config from the boot-config git repo (30s cache).
+        Returns the hardcoded fallback theme when git is unreachable.
+        source="git" means live data; source="fallback" means git was unreachable.
+      tags: [boot]
+      responses:
+        "200":
+          description: Theme configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:           { type: string }
+                  tagline:         { type: string }
+                  logo_ascii:      { type: array, items: { type: string } }
+                  logo_png_url:    { type: string }
+                  colors:
+                    type: object
+                    properties:
+                      background:   { type: string }
+                      foreground:   { type: string }
+                      highlight_bg: { type: string }
+                      highlight_fg: { type: string }
+                      gap_text:     { type: string }
+                  timeout_seconds: { type: integer }
+                  default_entry:   { type: string }
+                  source:          { type: string, enum: [git, fallback] }
+                  cached_at:       { type: string, format: date-time }
+
+  /api/v1/menu/entries:
+    get:
+      summary: Current OS boot catalog
+      description: |
+        Returns the live OS catalog from the boot-config git repo (30s cache).
+        When arch= is provided, filters to enabled entries valid for that architecture
+        (after alias resolution: i386→x86_64, amd64→x86_64, arm64→aarch64).
+        Disabled entries are excluded when arch= is provided.
+        Without arch=, all entries including disabled are returned.
+      tags: [boot]
+      parameters:
+        - in: query
+          name: arch
+          schema: { type: string }
+          description: Machine arch to filter by (x86_64, aarch64, i386, amd64, arm64)
+      responses:
+        "200":
+          description: OS catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:        { type: string }
+                        label:     { type: string }
+                        key:       { type: string }
+                        type:      { type: string, enum: [hook, url, chain] }
+                        variant:   { type: string }
+                        url:       { type: string }
+                        chain_url: { type: string }
+                        arch:      { type: array, items: { type: string } }
+                        enabled:   { type: boolean }
+                  source:    { type: string, enum: [git, fallback] }
+                  cached_at: { type: string, format: date-time }
+
+components:
+  parameters:
+    name:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Resource already exists or conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    Hardware:
+      type: object
+      properties:
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            namespace:
+              type: string
+        spec:
+          type: object
+
+    CreateHardwareRequest:
+      type: object
+      required: [name, mac, ip]
+      properties:
+        name:
+          type: string
+          example: myhost
+        mac:
+          type: string
+          example: bc:24:11:aa:bb:cc
+        ip:
+          type: string
+          example: 10.11.50.20
+        gateway:
+          type: string
+          example: 10.11.30.20
+        hostname:
+          type: string
+        netmask:
+          type: string
+          example: 255.255.0.0
+
+    Template:
+      type: object
+      properties:
+        metadata:
+          type: object
+        spec:
+          type: object
+
+    CreateTemplateRequest:
+      type: object
+      required: [name, data]
+      properties:
+        name:
+          type: string
+          example: ubuntu-24-04
+        data:
+          type: string
+          example: "version: \"0.1\"\nname: ubuntu-24-04\nglobal_timeout: 1800\ntasks: []"
+
+    Workflow:
+      type: object
+      properties:
+        metadata:
+          type: object
+        spec:
+          type: object
+        status:
+          type: object
+          properties:
+            state:
+              type: string
+              enum: [STATE_PENDING, STATE_RUNNING, STATE_SUCCESS, STATE_FAILED, STATE_TIMEOUT]
+
+    CreateWorkflowRequest:
+      type: object
+      required: [name, templateRef, hardwareRef]
+      properties:
+        name:
+          type: string
+        templateRef:
+          type: string
+          example: ubuntu-24-04
+        hardwareRef:
+          type: string
+          example: myhost
+        mac:
+          type: string
+          example: bc:24:11:aa:bb:cc
+        hardwareMap:
+          type: object
+          additionalProperties:
+            type: string
+
+    ArtifactInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: ubuntu-24.04-server-cloudimg-amd64.raw.gz
+        size:
+          type: integer
+          example: 1234567890
+        modified:
+          type: string
+          format: date-time
+        url:
+          type: string
+          example: http://10.11.30.91:8080/ubuntu-24.04-server-cloudimg-amd64.raw.gz
+
+    BootConfig:
+      type: object
+      properties:
+        kernelArgs:
+          type: string
+          example: "tink_worker_image=quay.io/tinkerbell/tink-worker:v0.12.1"
+        osieURL:
+          type: string
+          example: http://10.11.30.91:8080
+        isoEnabled:
+          type: boolean
+          example: false
+        isoURL:
+          type: string
+
+    PatchBootRequest:
+      type: object
+      properties:
+        kernelArgs:
+          type: string
+        osieURL:
+          type: string
+        isoEnabled:
+          type: boolean
+        isoURL:
+          type: string
+
+    CreateMachineRequest:
+      type: object
+      required: [name, host, authSecretRef]
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+          example: 192.168.1.100
+        port:
+          type: integer
+          example: 623
+        authSecretRef:
+          type: string
+          example: bmc-secret
+        insecureTLS:
+          type: boolean
+          example: false
+
+    FetchRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: HTTP URL of the source image (qcow2, raw, img, or raw.gz)
+          example: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+        name:
+          type: string
+          description: Output filename (without extension — .raw.gz will be appended). Defaults to filename from URL.
+          example: ubuntu-24.04-server
+
+    FetchJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        name:
+          type: string
+          example: ubuntu-24.04-server.raw.gz
+        status:
+          type: string
+          enum: [pending, downloading, converting, compressing, done, error]
+        message:
+          type: string
+        outputURL:
+          type: string
+          description: Nginx URL to use as IMG_URL in a workflow — only set when status is done
+          example: "http://10.11.30.91:8080/ubuntu-24.04-server.raw.gz"
+        startedAt:
+          type: string
+          format: date-time
+        doneAt:
+          type: string
+          format: date-time
+
+    NetbootRequest:
+      type: object
+      description: At least one field must be provided.
+      properties:
+        allowPXE:
+          type: boolean
+          description: Whether the machine is allowed to PXE boot.
+          example: false
+        allowWorkflow:
+          type: boolean
+          description: Whether the machine is allowed to run Tinkerbell workflows.
+          example: true
+
+    NetbootStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          example: myhost
+        allowPXE:
+          type: boolean
+          example: false
+        allowWorkflow:
+          type: boolean
+          example: true
+
+    WorkflowAction:
+      type: object
+      properties:
+        name:
+          type: string
+          example: kontango-gate
+        image:
+          type: string
+          example: alpine:3.19
+        status:
+          type: string
+          enum: [STATE_PENDING, STATE_RUNNING, STATE_SUCCESS, STATE_FAILED, STATE_TIMEOUT]
+          example: STATE_SUCCESS
+        seconds:
+          type: integer
+          example: 42
+        message:
+          type: string
+          example: ""
+        startedAt:
+          type: string
+          format: date-time
+
+    WorkflowTasksResponse:
+      type: object
+      properties:
+        workflowName:
+          type: string
+          example: tink-test-02
+        state:
+          type: string
+          enum: [STATE_PENDING, STATE_RUNNING, STATE_SUCCESS, STATE_FAILED, STATE_TIMEOUT]
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowAction"

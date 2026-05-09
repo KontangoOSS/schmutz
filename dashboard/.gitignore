@@ -1,0 +1,7 @@
+build/
+output.json
+*.pem
+*.key
+.env
+/tmp/
+ziti-dash

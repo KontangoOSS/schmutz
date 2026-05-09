@@ -1,0 +1,49 @@
+# =============================================================================
+# 01-discover — Checkout & Discover
+# =============================================================================
+# Gathers repo metadata for downstream workflows:
+#   1. Clones/fetches the repo (Woodpecker does this automatically)
+#   2. Runs discover.sh to gather metadata from git + config/konfig.json
+#   3. Queries Konfig API + Ticketarr for app registration
+#   4. Outputs .ci-discover.env for downstream workflows
+# =============================================================================
+
+when:
+  - event: push
+    branch: main
+  - event: manual
+
+steps:
+  - name: discover
+    image: alpine:3.20
+    commands:
+      - apk add --no-cache bash curl jq git >/dev/null 2>&1
+      - |
+        set -e
+        echo "══════════════════════════════════════════"
+        echo "  Checkout: ${CI_REPO_NAME}"
+        echo "  Branch:   ${CI_COMMIT_BRANCH}"
+        echo "  Commit:   ${CI_COMMIT_SHA:0:8}"
+        echo "══════════════════════════════════════════"
+
+        echo ""
+        echo "Git log (last 3):"
+        git log --oneline -3
+
+        echo ""
+        if [ -f scripts/ci/discover.sh ]; then
+          bash scripts/ci/discover.sh
+        else
+          echo "No scripts/ci/discover.sh — using defaults from git context"
+          {
+            echo "CI_APP_REPO_NAME=${CI_REPO_NAME}"
+            echo "CI_APP_BRANCH=${CI_COMMIT_BRANCH}"
+            echo "CI_APP_COMMIT_SHA=${CI_COMMIT_SHA}"
+            echo "CI_APP_COMMIT_SHORT=${CI_COMMIT_SHA:0:8}"
+            echo "CI_APP_HOSTNAME=$(echo "${CI_REPO_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | cut -c1-63)"
+            echo "CI_APP_CORES=2"
+            echo "CI_APP_MEMORY=2048"
+            echo "CI_APP_DISK=20"
+          } > .ci-discover.env
+          cat .ci-discover.env
+        fi

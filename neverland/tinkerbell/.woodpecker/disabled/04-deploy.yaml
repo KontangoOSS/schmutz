@@ -1,0 +1,671 @@
+# =============================================================================
+# Full CI/CD Pipeline: Authenticate → Lint → Test → Provision → Deploy → Docs
+# =============================================================================
+#
+# Step 1: AUTHENTICATE
+#   - Fetch infra secrets from Phase (Proxmox creds, SSH keys)
+#   - Login to Vaultwarden with bot credentials
+#   - Pull app-specific secrets from the app's vault collection
+#   - Query Konfig API for app config (VMID, sizing, image, repo)
+#
+# Step 2: LINT
+#   - Auto-detect language (Go, Node/TS, Python)
+#   - Run appropriate linter (golangci-lint, eslint, ruff)
+#   - Fail pipeline on lint errors
+#
+# Step 3: TEST
+#   - Run make test (if Makefile exists)
+#   - Fallback: go test / npm test / pytest based on detection
+#   - Fail pipeline on test failures
+#
+# Step 4: PROVISION
+#   - Check if LXC container exists on Proxmox
+#   - If NOT: create LXC, install base packages, Docker, Ziti tunnel, SSH
+#   - If YES: skip to Step 5
+#
+# Step 5: DEPLOY
+#   - Pull/update git repo inside the container
+#   - Write .env from vault secrets
+#   - Restart the application (docker compose up -d)
+#
+# Step 6: DOCS SYNC
+#   - Create Ticketarr ticket in DOC project for MkDocs sync
+#
+# Secrets required:
+#   - PHASE_SERVICE_TOKEN  (global)  — Phase secrets manager access
+#   - BW_MASTER_PASSWORD   (global)  — Vaultwarden master password
+#   - BOT_USER             (repo)    — Forgejo bot username (read-only)
+#   - BOT_TOKEN            (repo)    — Forgejo bot API token
+# =============================================================================
+
+when:
+  - event: push
+    branch: main
+  - event: manual
+
+depends_on:
+  - 01-discover
+
+steps:
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 1: AUTHENTICATE — Gather all secrets and config
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: fetch-secrets
+    image: git.konoss.org/kreate/woodpecker-phase-plugin:latest
+    settings:
+      phase_token:
+        from_secret: PHASE_SERVICE_TOKEN
+      host: https://phase.konoss.org
+      app: master
+      env: Production
+      paths:
+        - /vaultwarden/
+        - /vaultwarden/ci/
+        - /ticketarr/
+
+  - name: authenticate
+    image: node:20-alpine
+    environment:
+      BW_MASTER_PASSWORD:
+        from_secret: BW_MASTER_PASSWORD
+      BOT_USER:
+        from_secret: BOT_USER
+      BOT_TOKEN:
+        from_secret: BOT_TOKEN
+    commands:
+      - |
+        set -e
+        apk add --no-cache bash curl jq >/dev/null 2>&1
+        npm install -g @bitwarden/cli@2024.6.0 >/dev/null 2>&1
+
+        . ./.secrets.env
+
+        APP_NAME="${CI_REPO_NAME}"
+        VAULT_COLLECTION="apps/$${APP_NAME}"
+        BW_HOST="http://10.11.30.94:8080"
+        BW_USER="admin@kontango.us"
+        BW_PASS="$${BW_MASTER_PASSWORD}"
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 1: AUTHENTICATE"
+        echo "  App: $$APP_NAME"
+        echo "══════════════════════════════════════════"
+
+        # ── 1a. Vaultwarden login ──────────────────────────────────
+        bw config server "$$BW_HOST" 2>/dev/null
+        LOGIN_OUT=$$(bw login "$$BW_USER" "$$BW_PASS" --raw 2>/dev/null) && export BW_SESSION="$$LOGIN_OUT" || true
+        if [ -z "$${BW_SESSION:-}" ]; then
+          UNLOCK_OUT=$$(bw unlock "$$BW_PASS" --raw 2>/dev/null) && export BW_SESSION="$$UNLOCK_OUT" || true
+        fi
+        [ -n "$$BW_SESSION" ] || { echo "ERROR: Vaultwarden auth failed"; exit 1; }
+        echo "  Vault: authenticated"
+
+        bw sync >/dev/null 2>&1
+        ORG_ID=$$(bw list organizations | jq -r '.[0].id')
+
+        # ── 1b. Pull secrets from vault collection ─────────────────
+        COL_ID=$$(bw list org-collections --organizationid "$$ORG_ID" \
+          | jq -r --arg name "$$VAULT_COLLECTION" \
+            '.[] | select(.name | ascii_downcase == ($$name | ascii_downcase)) | .id')
+
+        [ -n "$$COL_ID" ] && [ "$$COL_ID" != "null" ] || { echo "ERROR: Collection '$$VAULT_COLLECTION' not found"; exit 1; }
+        echo "  Vault: collection $$VAULT_COLLECTION ($$COL_ID)"
+
+        ITEMS=$$(bw list items --collectionid "$$COL_ID" 2>/dev/null)
+        {
+          echo "# Vault secrets for $$APP_NAME"
+          echo "$$ITEMS" | jq -r '.[] | select(.type == 2) | .notes // empty' \
+            | grep -E '^[A-Za-z_][A-Za-z0-9_]*=.' || true
+          echo "$$ITEMS" | jq -r '
+            .[] | select(.fields != null) | .fields[] |
+            select(.name != null and .value != null) |
+            "\(.name)=\(.value)"' 2>/dev/null || true
+        } > .vault-env
+        chmod 600 .vault-env
+        echo "  Vault: $$(grep -cE '^[A-Za-z_].*=' .vault-env 2>/dev/null || echo 0) variables"
+
+        bw logout >/dev/null 2>&1 || true
+
+        # ── 1c. Query Konfig for app config ────────────────────────
+        KONFIG_URL="https://konfig.konoss.org/api/v1"
+        APP_JSON=$$(curl -sk "$$KONFIG_URL/applications?page_size=200" \
+          | jq -r --arg name "$$APP_NAME" \
+            '.data[] | select(.name | ascii_downcase == ($$name | ascii_downcase))')
+
+        [ -n "$$APP_JSON" ] || { echo "ERROR: App '$$APP_NAME' not found in Konfig"; exit 1; }
+
+        # Prefer internal repo link, fallback to external
+        REPO_URL=$$(echo "$$APP_JSON" | jq -r \
+          '(.links[]? | select(.link_type == "repository" and .is_internal == true) | .path) // empty')
+        if [ -z "$$REPO_URL" ]; then
+          REPO_URL=$$(echo "$$APP_JSON" | jq -r \
+            '(.links[]? | select(.link_type == "repository") | .path) // empty')
+        fi
+
+        {
+          echo "KONFIG_UUID=$$(echo "$$APP_JSON" | jq -r '.uuid // empty')"
+          echo "KONFIG_VMID=$$(echo "$$APP_JSON" | jq -r '.vmid // empty')"
+          echo "KONFIG_CATEGORY=$$(echo "$$APP_JSON" | jq -r '.category // empty')"
+          echo "KONFIG_IMAGE=$$(echo "$$APP_JSON" | jq -r '.docker_image // empty')"
+          echo "KONFIG_PORT=$$(echo "$$APP_JSON" | jq -r '.default_port // empty')"
+          echo "KONFIG_CORES=$$(echo "$$APP_JSON" | jq -r \
+            '(.configurations[]? | select(.tier == "suggested") | .instance_size.cores) // 2')"
+          echo "KONFIG_MEMORY=$$(echo "$$APP_JSON" | jq -r \
+            '(.configurations[]? | select(.tier == "suggested") | .instance_size.memory_mb) // 2048')"
+          echo "KONFIG_REPO=$$REPO_URL"
+        } > .konfig-env
+
+        echo "  Konfig: VMID=$$(grep KONFIG_VMID .konfig-env | cut -d= -f2) | $$(grep KONFIG_CORES .konfig-env | cut -d= -f2)c/$$(grep KONFIG_MEMORY .konfig-env | cut -d= -f2)MB"
+        echo "  Repo: $$REPO_URL"
+
+        # ── 1d. Write bot credentials for git clone ────────────────
+        {
+          echo "GIT_USER=$${BOT_USER}"
+          echo "GIT_TOKEN=$${BOT_TOKEN}"
+        } > .bot-env
+        chmod 600 .bot-env
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 1: COMPLETE"
+        echo "══════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 2: LINT — Static analysis and formatting checks
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: lint
+    image: alpine:3.20
+    commands:
+      - |
+        set -e
+        apk add --no-cache bash jq >/dev/null 2>&1
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 2: LINT"
+        echo "══════════════════════════════════════════"
+
+        FAIL=0
+
+        # ── Detect language and run appropriate linter ────────────
+        if [ -f go.mod ]; then
+          echo "  Detected: Go"
+          apk add --no-cache go >/dev/null 2>&1
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest 2>/dev/null
+          echo "  Running golangci-lint..."
+          if golangci-lint run ./... 2>&1; then
+            echo "  PASS: Go lint"
+          else
+            echo "  FAIL: Go lint"
+            FAIL=1
+          fi
+        fi
+
+        if [ -f package.json ]; then
+          echo "  Detected: Node/TypeScript"
+          apk add --no-cache nodejs npm >/dev/null 2>&1
+          npm ci --silent 2>/dev/null || npm install --silent 2>/dev/null
+          if jq -e '.scripts.lint' package.json >/dev/null 2>&1; then
+            echo "  Running npm run lint..."
+            if npm run lint 2>&1; then
+              echo "  PASS: JS/TS lint"
+            else
+              echo "  FAIL: JS/TS lint"
+              FAIL=1
+            fi
+          elif npx eslint --version >/dev/null 2>&1; then
+            echo "  Running eslint..."
+            if npx eslint . 2>&1; then
+              echo "  PASS: ESLint"
+            else
+              echo "  FAIL: ESLint"
+              FAIL=1
+            fi
+          else
+            echo "  SKIP: No lint script or eslint found"
+          fi
+        fi
+
+        if [ -f requirements.txt ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+          echo "  Detected: Python"
+          apk add --no-cache python3 py3-pip >/dev/null 2>&1
+          pip install ruff >/dev/null 2>&1
+          echo "  Running ruff..."
+          if ruff check . 2>&1; then
+            echo "  PASS: Python lint"
+          else
+            echo "  FAIL: Python lint"
+            FAIL=1
+          fi
+        fi
+
+        # ── Check API spec files exist ───────────────────────────
+        echo ""
+        echo "  Checking API specs..."
+        if [ -d docs/api ]; then
+          if [ -f docs/api/swagger.json ]; then
+            echo "  PASS: docs/api/swagger.json"
+          else
+            echo "  WARN: docs/api/swagger.json missing"
+          fi
+          if [ -f docs/api/openapi.yaml ]; then
+            echo "  PASS: docs/api/openapi.yaml"
+          else
+            echo "  WARN: docs/api/openapi.yaml missing"
+          fi
+        else
+          echo "  SKIP: No docs/api/ directory"
+        fi
+
+        echo ""
+        if [ "$$FAIL" = "1" ]; then
+          echo "  ERROR: Lint checks failed"
+          exit 1
+        fi
+        echo "══════════════════════════════════════════"
+        echo "  Step 2: COMPLETE"
+        echo "══════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 3: TEST — Unit and integration tests
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: test
+    image: alpine:3.20
+    commands:
+      - |
+        set -e
+        apk add --no-cache bash make jq >/dev/null 2>&1
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 3: TEST"
+        echo "══════════════════════════════════════════"
+
+        # ── Prefer Makefile target ───────────────────────────────
+        if [ -f Makefile ] && grep -q '^test:' Makefile; then
+          echo "  Running: make test"
+          make test
+          echo "  PASS: make test"
+          echo "══════════════════════════════════════════"
+          echo "  Step 3: COMPLETE"
+          echo "══════════════════════════════════════════"
+          exit 0
+        fi
+
+        # ── Fallback: detect language and run tests ──────────────
+        TESTED=0
+
+        if [ -f go.mod ]; then
+          echo "  Detected: Go"
+          apk add --no-cache go >/dev/null 2>&1
+          echo "  Running: go test ./..."
+          go test ./... -v -count=1 2>&1
+          echo "  PASS: Go tests"
+          TESTED=1
+        fi
+
+        if [ -f package.json ]; then
+          echo "  Detected: Node/TypeScript"
+          apk add --no-cache nodejs npm >/dev/null 2>&1
+          npm ci --silent 2>/dev/null || npm install --silent 2>/dev/null
+          if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+            echo "  Running: npm test"
+            npm test 2>&1
+            echo "  PASS: npm test"
+            TESTED=1
+          else
+            echo "  SKIP: No test script in package.json"
+          fi
+        fi
+
+        if [ -f requirements.txt ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+          echo "  Detected: Python"
+          apk add --no-cache python3 py3-pip >/dev/null 2>&1
+          pip install pytest >/dev/null 2>&1
+          if [ -d tests ] || [ -d test ]; then
+            echo "  Running: pytest"
+            pytest -v 2>&1
+            echo "  PASS: pytest"
+            TESTED=1
+          else
+            echo "  SKIP: No tests/ directory"
+          fi
+        fi
+
+        if [ "$$TESTED" = "0" ]; then
+          echo "  WARN: No test runner detected — skipping"
+        fi
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 3: COMPLETE"
+        echo "══════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 4: PROVISION — Create container if it doesn't exist
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: provision
+    image: alpine:3.20
+    commands:
+      - |
+        set -e
+        apk add --no-cache curl jq openssh-client >/dev/null 2>&1
+
+        . ./.secrets.env
+        . ./.konfig-env
+        . ./.bot-env
+
+        APP_NAME="${CI_REPO_NAME}"
+        VMID="$${KONFIG_VMID}"
+
+        # Proxmox connection
+        NODE="$${PROXMOX_NODE}"
+        API_URL="$${PROXMOX_API_URL}"
+        API_TOKEN="$${PROXMOX_TOKEN_ID}=$${PROXMOX_TOKEN_SECRET}"
+
+        SSH_HOST="$${PLUGIN_SSH_HOST}"
+        SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+        KEYFILE=$$(mktemp)
+        echo "$${PLUGIN_SSH_KEY}" > "$$KEYFILE"
+        chmod 600 "$$KEYFILE"
+        trap 'rm -f "$$KEYFILE"' EXIT
+
+        pve_ssh() { ssh $$SSH_OPTS -i "$$KEYFILE" "root@$${SSH_HOST}" "$$@"; }
+        pve_exec() { pve_ssh "pct exec $$VMID -- bash -c '$$1'"; }
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 4: PROVISION"
+        echo "  App:  $$APP_NAME"
+        echo "  VMID: $$VMID"
+        echo "══════════════════════════════════════════"
+
+        # ── 4a. Check if container exists ──────────────────────────
+        HTTP_CODE=$$(curl -sk -o /dev/null -w '%{http_code}' \
+          -H "Authorization: PVEAPIToken=$${API_TOKEN}" \
+          "$${API_URL}/nodes/$${NODE}/lxc/$${VMID}/status/current")
+
+        if [ "$$HTTP_CODE" = "200" ]; then
+          echo "  Container exists — skipping provision"
+          echo "PROVISION_SKIPPED=true" > .provision-status
+          echo "══════════════════════════════════════════"
+          exit 0
+        fi
+
+        echo "  Container not found — creating..."
+        echo "PROVISION_SKIPPED=false" > .provision-status
+
+        # ── 4b. Create LXC container ──────────────────────────────
+        TEMPLATE="local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+        CREATE_RESP=$$(curl -sk -X POST \
+          -H "Authorization: PVEAPIToken=$${API_TOKEN}" \
+          -d "vmid=$$VMID" \
+          -d "hostname=$$APP_NAME" \
+          -d "ostemplate=$$TEMPLATE" \
+          -d "storage=local-lvm" \
+          -d "rootfs=local-lvm:8" \
+          -d "cores=$${KONFIG_CORES}" \
+          -d "memory=$${KONFIG_MEMORY}" \
+          -d "swap=512" \
+          -d "net0=name=eth0,bridge=vmbr0,ip=dhcp" \
+          -d "features=nesting=1,keyctl=1" \
+          -d "unprivileged=1" \
+          -d "start=1" \
+          -d "onboot=1" \
+          "$${API_URL}/nodes/$${NODE}/lxc")
+
+        TASK_ID=$$(echo "$$CREATE_RESP" | jq -r '.data // empty')
+        echo "  Create task: $$TASK_ID"
+
+        echo "  Waiting for container to boot..."
+        sleep 25
+
+        # Verify it started
+        STATUS=$$(curl -sk \
+          -H "Authorization: PVEAPIToken=$${API_TOKEN}" \
+          "$${API_URL}/nodes/$${NODE}/lxc/$${VMID}/status/current" | jq -r '.data.status // "unknown"')
+        echo "  Status: $$STATUS"
+
+        # ── 4c. Install base packages ─────────────────────────────
+        echo "  Installing base packages..."
+        pve_exec "apt-get update -qq && apt-get install -y -qq \
+          git curl ca-certificates gnupg openssh-server \
+          jq wget sudo >/dev/null 2>&1"
+
+        # ── 4d. Install Docker ────────────────────────────────────
+        echo "  Installing Docker..."
+        pve_exec "curl -fsSL https://get.docker.com | sh >/dev/null 2>&1"
+        pve_exec "systemctl enable docker && systemctl start docker"
+
+        # ── 4e. Setup SSH ─────────────────────────────────────────
+        echo "  Configuring SSH..."
+        pve_exec "mkdir -p /root/.ssh && chmod 700 /root/.ssh"
+        pve_exec "sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config"
+        pve_exec "sed -i 's/PermitRootLogin yes/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config"
+        pve_exec "systemctl enable ssh && systemctl restart ssh"
+
+        # Copy the PVE host's authorized keys into the container
+        pve_ssh "pct push $$VMID /root/.ssh/authorized_keys /root/.ssh/authorized_keys --perms 0600" || true
+
+        # ── 4f. Install Ziti Edge Tunnel ──────────────────────────
+        echo "  Installing Ziti edge tunnel..."
+        pve_exec "mkdir -p /opt/openziti && mkdir -p /opt/openziti/identities"
+
+        # Write the docker-compose for ziti-edge-tunnel
+        ZITI_COMPOSE=$(printf '%s\n' \
+          'services:' \
+          '  ziti-tunnel:' \
+          '    image: openziti/ziti-edge-tunnel:latest' \
+          '    restart: unless-stopped' \
+          '    network_mode: host' \
+          '    privileged: true' \
+          '    volumes:' \
+          '      - ./identities:/ziti-edge-tunnel' \
+          '      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket' \
+          '    extra_hosts:' \
+          '      - ctrl-1.zitinet:64.225.55.94' \
+          '      - ctrl-2.zitinet:144.126.212.95' \
+          '      - ctrl-3.zitinet:159.65.86.73' \
+          '    environment:' \
+          '      - ZITI_IDENTITY_BASENAME=ziti_id' \
+          '    entrypoint: ziti-edge-tunnel' \
+          '    command: run-host --identity /ziti-edge-tunnel/ziti_id.json')
+        pve_exec "echo '$$ZITI_COMPOSE' > /opt/openziti/docker-compose.yml"
+
+        # Note: Ziti identity enrollment happens separately via zstack tooling
+        # The container is ready to receive a JWT and enroll
+        echo "  Ziti: docker-compose written (identity enrollment pending)"
+
+        # ── 4g. Create app directory ──────────────────────────────
+        pve_exec "mkdir -p /opt/$${APP_NAME}"
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 4: COMPLETE — $$APP_NAME (VMID $$VMID) provisioned"
+        echo "══════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 5: DEPLOY — Clone/update repo, write .env, restart app
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: deploy
+    image: alpine:3.20
+    commands:
+      - |
+        set -e
+        apk add --no-cache curl jq openssh-client >/dev/null 2>&1
+
+        . ./.konfig-env
+        . ./.vault-env 2>/dev/null || true
+        . ./.bot-env
+
+        APP_NAME="${CI_REPO_NAME}"
+        BRANCH="${CI_COMMIT_BRANCH}"
+        COMMIT="${CI_COMMIT_SHA}"
+        VMID="$${KONFIG_VMID}"
+        REPO_URL="$${KONFIG_REPO}"
+        IMAGE="$${KONFIG_IMAGE}"
+        PORT="$${KONFIG_PORT}"
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 5: DEPLOY"
+        echo "  App:    $$APP_NAME"
+        echo "  VMID:   $$VMID"
+        echo "  Branch: $$BRANCH"
+        echo "  Commit: $${COMMIT:0:8}"
+        echo "══════════════════════════════════════════"
+
+        . ./.secrets.env
+
+        SSH_HOST="$${PLUGIN_SSH_HOST}"
+        SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+        KEYFILE=$$(mktemp)
+        echo "$${PLUGIN_SSH_KEY}" > "$$KEYFILE"
+        chmod 600 "$$KEYFILE"
+        trap 'rm -f "$$KEYFILE" .konfig-env .vault-env .bot-env .secrets.env' EXIT
+
+        pve_ssh() { ssh $$SSH_OPTS -i "$$KEYFILE" "root@$${SSH_HOST}" "$$@"; }
+        pve_exec() { pve_ssh "pct exec $$VMID -- bash -c '$$1'"; }
+
+        # ── 5a. Clone or update git repo ──────────────────────────
+        if [ -n "$$REPO_URL" ]; then
+          # Inject bot token into clone URL for authenticated access
+          AUTH_URL=$$(echo "$$REPO_URL" | sed "s|https://|https://$${GIT_USER}:$${GIT_TOKEN}@|")
+
+          HAS_REPO=$$(pve_exec "[ -d /opt/$${APP_NAME}/.git ] && echo yes || echo no" 2>/dev/null || echo "no")
+
+          if [ "$$HAS_REPO" = "yes" ]; then
+            echo "  Git: pulling latest..."
+            pve_exec "cd /opt/$${APP_NAME} && git remote set-url origin '$$AUTH_URL'"
+            pve_exec "cd /opt/$${APP_NAME} && git fetch origin && git checkout $$BRANCH && git pull origin $$BRANCH"
+          else
+            echo "  Git: cloning..."
+            pve_exec "git clone -b $$BRANCH '$$AUTH_URL' /opt/$${APP_NAME}"
+          fi
+
+          DEPLOYED_SHA=$$(pve_exec "cd /opt/$${APP_NAME} && git rev-parse --short HEAD 2>/dev/null" || echo "unknown")
+          echo "  Git: deployed $$DEPLOYED_SHA"
+
+          # Strip credentials from stored remote
+          pve_exec "cd /opt/$${APP_NAME} && git remote set-url origin '$$REPO_URL'"
+        fi
+
+        # ── 5b. Write .env from vault secrets ─────────────────────
+        echo "  Writing .env..."
+
+        # Build .env content from vault-env + konfig metadata
+        ENV_CONTENT=""
+
+        # Add vault secrets (skip comments and metadata lines)
+        if [ -f .vault-env ]; then
+          ENV_CONTENT=$$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=.' .vault-env || true)
+        fi
+
+        # Add standard vars
+        ENV_CONTENT="$${ENV_CONTENT}
+        APP_NAME=$${APP_NAME}
+        APP_PORT=$${PORT}
+        APP_IMAGE=$${IMAGE}
+        DEPLOY_COMMIT=$${COMMIT:0:8}
+        DEPLOY_BRANCH=$${BRANCH}"
+
+        # Write to container
+        pve_ssh "pct exec $$VMID -- bash -c 'cat > /opt/$${APP_NAME}/.env << ENVEOF
+        $${ENV_CONTENT}
+        ENVEOF
+        chmod 600 /opt/$${APP_NAME}/.env'"
+
+        VAR_COUNT=$$(echo "$$ENV_CONTENT" | grep -cE '^[A-Za-z_]' || echo 0)
+        echo "  Env: $$VAR_COUNT variables written"
+
+        # ── 5c. Restart application ───────────────────────────────
+        echo "  Restarting application..."
+
+        # Try in order: scripts/restart.sh → docker compose → docker run
+        RESTART_RESULT=$$(pve_exec "cd /opt/$${APP_NAME} && \
+          if [ -f scripts/restart.sh ]; then
+            echo 'restart-script'
+          elif [ -f docker-compose.yml ] || [ -f compose.yml ]; then
+            echo 'docker-compose'
+          elif [ -n '$${IMAGE}' ]; then
+            echo 'docker-run'
+          else
+            echo 'none'
+          fi" 2>/dev/null || echo "none")
+
+        case "$$RESTART_RESULT" in
+          restart-script)
+            echo "  Using: scripts/restart.sh"
+            pve_exec "cd /opt/$${APP_NAME} && bash scripts/restart.sh"
+            ;;
+          docker-compose)
+            echo "  Using: docker compose"
+            pve_exec "cd /opt/$${APP_NAME} && docker compose pull 2>/dev/null; docker compose up -d --remove-orphans"
+            ;;
+          docker-run)
+            echo "  Using: docker run ($$IMAGE)"
+            pve_exec "docker pull $$IMAGE 2>/dev/null || true"
+            pve_exec "docker stop $$APP_NAME 2>/dev/null || true"
+            pve_exec "docker rm $$APP_NAME 2>/dev/null || true"
+            pve_exec "docker run -d --name $$APP_NAME --restart unless-stopped --env-file /opt/$${APP_NAME}/.env -p $${PORT}:$${PORT} $$IMAGE"
+            ;;
+          *)
+            echo "  No restart method found — skipping"
+            ;;
+        esac
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 5: COMPLETE"
+        echo "  $$APP_NAME deployed to VMID $$VMID"
+        echo "  Commit: $${COMMIT:0:8} ($$BRANCH)"
+        echo "══════════════════════════════════════════"
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # STEP 6: DOCS SYNC — Create Ticketarr ticket for MkDocs update
+  # ═══════════════════════════════════════════════════════════════════════
+
+  - name: docs-sync
+    image: alpine:3.20
+    commands:
+      - apk add --no-cache curl jq
+      - |
+        . ./.secrets.env
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 6: DOCS SYNC"
+        echo "══════════════════════════════════════════"
+
+        # Authenticate with Ticketarr
+        TOKEN=$(curl -sf http://10.11.30.28:9090/api/auth/login \
+          -H "Content-Type: application/json" \
+          -d "{\"username\": \"admin\", \"password\": \"$${ADMIN_PASSWORD}\"}" \
+          | jq -r .access_token)
+
+        if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+          echo "  WARN: Failed to authenticate with Ticketarr — skipping docs sync"
+          exit 0
+        fi
+
+        COMMIT_SHA=$(echo "${CI_COMMIT_SHA}" | cut -c1-7)
+        COMMIT_MSG=$(echo "${CI_COMMIT_MESSAGE}" | head -1 | cut -c1-80)
+
+        # Create ticket in DOC project
+        RESPONSE=$(curl -sf -X POST "http://10.11.30.28:9090/api/workspaces/28773a88-f804-4d2d-8c49-222822fe8e85/projects/d670c0d5-e8d8-4882-b81d-8ef53fa88dd8/tickets" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"title\": \"Sync docs: ${CI_REPO_NAME} @ ${COMMIT_SHA}\",
+            \"description\": \"A commit to **main** on **${CI_REPO_NAME}** requires a docs sync to the MKDocs site.\n\n**Commit:** \`${COMMIT_SHA}\`\n**Message:** ${COMMIT_MSG}\n**Repo:** ${CI_REPO_CLONE_URL}\n\n### Checklist\n- [ ] Sync docs from repo to kore/docs\n- [ ] Verify MKDocs site rebuilt\",
+            \"story_points\": 1,
+            \"type_id\": \"71930977-34fb-4dfd-b757-1b74ff56323f\",
+            \"priority_id\": \"a04f565b-5bb9-410f-891f-747006dabbc5\"
+          }")
+
+        TICKET_KEY=$(echo "$RESPONSE" | jq -r '.key // empty')
+        if [ -n "$TICKET_KEY" ]; then
+          echo "  Created ticket $TICKET_KEY for ${CI_REPO_NAME} @ ${COMMIT_SHA}"
+        else
+          echo "  Ticket created (response: $RESPONSE)"
+        fi
+
+        echo "══════════════════════════════════════════"
+        echo "  Step 6: COMPLETE"
+        echo "══════════════════════════════════════════"

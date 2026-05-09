@@ -1,0 +1,16 @@
+services:
+  neverland:
+    build: .
+    ports:
+      - "8091:8091"
+    environment:
+      LISTEN_ADDR: "0.0.0.0:8091"
+      TINK_NAMESPACE: "tink-system"
+      KUBECONFIG: "/root/.kube/config"
+      ARTIFACTS_PATH: "/artifacts"
+      NGINX_URL: "http://10.11.30.91:8080"
+      SMEE_DEPLOYMENT: "smee"
+    volumes:
+      - "${HOME}/.kube:/root/.kube:ro"
+      - "${ARTIFACTS_PATH:-/tmp}:/artifacts"
+    restart: unless-stopped

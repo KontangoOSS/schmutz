@@ -1,0 +1,22 @@
+{
+  "konfig_id": "00000000-0000-0000-0000-000000000000",
+  "name": "APPNAME",
+  "org": "APPORG",
+  "description": "APPDESCRIPTION",
+  "version": "0.1.0",
+  "ecosystem": "kontango",
+  "registry": "git.konoss.org/APPORG/APPNAME",
+  "secrets": {
+    "provider": "phase",
+    "path": "/APPNAME/"
+  },
+  "platforms": [
+    "linux/amd64",
+    "linux/arm64"
+  ],
+  "deploy": {
+    "container": {},
+    "binary": {},
+    "plugin": {}
+  }
+}

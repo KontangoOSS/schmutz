@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kontango — Network Console</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <h1>kontango</h1>
+  <div class="sub">network console</div>
+
+  <div class="nav-section">Monitor</div>
+  <div class="nav-item active" data-page="overview">Overview <span class="badge" id="nav-services">-</span></div>
+  <div class="nav-item" data-page="services">Services <span class="badge" id="nav-svc">-</span></div>
+  <div class="nav-item" data-page="identities-combined">Identities <span class="badge" id="nav-identities-combined">-</span></div>
+  <div class="nav-item" data-page="routers">Edge Routers <span class="badge" id="nav-routers">-</span></div>
+  <div class="nav-item" data-page="transit-routers">Transit Routers <span class="badge" id="nav-transit">-</span></div>
+  <div class="nav-item" data-page="terminators">Terminators</div>
+
+  <div class="nav-section">Policies</div>
+  <div class="nav-item" data-page="policies">Service Policies <span class="badge" id="nav-svc-policies">-</span></div>
+  <div class="nav-item" data-page="edge-router-policies">Router Policies <span class="badge" id="nav-erp">-</span></div>
+  <div class="nav-item" data-page="serp">Svc Edge Router <span class="badge" id="nav-serp">-</span></div>
+  <div class="nav-item" data-page="auth-policies">Auth Policies <span class="badge" id="nav-auth">-</span></div>
+  <div class="nav-item" data-page="posture-checks">Posture Checks <span class="badge" id="nav-posture">-</span></div>
+
+  <div class="nav-section">Security</div>
+  <div class="nav-item" data-page="cert-authorities">Cert Authorities <span class="badge" id="nav-ca">-</span></div>
+  <div class="nav-item" data-page="ext-jwt-signers">JWT Signers <span class="badge" id="nav-jwt">-</span></div>
+
+  <div class="nav-section">Sessions</div>
+  <div class="nav-item" data-page="api-sessions">API Sessions <span class="badge" id="nav-api-sess">-</span></div>
+  <div class="nav-item" data-page="sessions">Sessions <span class="badge" id="nav-sess">-</span></div>
+
+  <div class="nav-section">Fabric</div>
+  <div class="nav-item" data-page="fabric-tunnels">Tunnels <span class="badge" id="nav-tunnels">-</span></div>
+  <div class="nav-item" data-page="fabric-controllers">Controllers <span class="badge" id="nav-controllers">-</span></div>
+  <div class="nav-item" data-page="fabric-routers">Routers <span class="badge" id="nav-fab-routers">-</span></div>
+
+  <div class="nav-section">Enrollment</div>
+  <div class="nav-item" data-page="enrollments">Enrollments <span class="badge" id="nav-enrollments">-</span></div>
+  <div class="nav-item" data-page="telemetry">Telemetry <span class="badge" id="nav-telemetry">-</span></div>
+
+  <div class="nav-section">Sandbox</div>
+  <div class="nav-item" data-page="plugins">Plugins <span class="badge" id="nav-plugins">-</span></div>
+  <div class="nav-item" data-page="workflows">Workflows</div>
+
+  <div class="sidebar-footer">
+    <span id="footer-version">connecting...</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <span id="last-updated">loading...</span>
+    <button id="refresh-btn" onclick="loadAll()">refresh</button>
+  </div>
+
+  <div class="content">
+    <div class="error-banner" id="error-banner"></div>
+
+    <!-- ============== OVERVIEW ============== -->
+    <div class="page active" id="page-overview">
+      <div class="stats" id="stats">
+        <div class="stat-card"><div class="label">Services</div><div class="value" id="s-svc">-</div></div>
+        <div class="stat-card"><div class="label">Identities</div><div class="value" id="s-ident">-</div><div class="sub" id="s-ident-sub"></div></div>
+        <div class="stat-card"><div class="label">Routers</div><div class="value" id="s-rtr">-</div><div class="sub" id="s-rtr-sub"></div></div>
+        <div class="stat-card"><div class="label">Terminators</div><div class="value" id="s-term">-</div></div>
+        <div class="stat-card"><div class="label">API Sessions</div><div class="value" id="s-sess">-</div></div>
+        <div class="stat-card"><div class="label">Plugins</div><div class="value" id="s-plugins">-</div><div class="sub" id="s-actions-sub"></div></div>
+      </div>
+
+      <!-- Quick view: routers -->
+      <table id="overview-routers">
+        <thead><tr><th>Router</th><th>Status</th><th>Region</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- ============== SERVICES ============== -->
+    <div class="page" id="page-services">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span></span>
+        <button class="btn btn-primary" onclick="showCreateModal('service')">+ new service</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-services"></tbody></table>
+    </div>
+
+    <!-- ============== IDENTITIES ============== -->
+    <!-- old raw identities (hidden, kept for data) -->
+    <div class="page" id="page-identities" style="display:none"></div>
+
+    <!-- ============== COMBINED IDENTITIES ============== -->
+    <div class="page" id="page-identities-combined">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="combined-ident-summary"></span>
+        <input type="text" id="ident-search" placeholder="search by name, hostname, nickname..." class="fb-input" style="width:280px">
+        <button class="btn btn-primary" onclick="showCreateModal('identity')">+ new identity</button>
+      </div>
+      <div id="combined-ident-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0.75rem"></div>
+    </div>
+
+    <!-- ============== ROUTERS ============== -->
+    <div class="page" id="page-routers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span></span>
+        <button class="btn btn-primary" onclick="showCreateModal('edge-router')">+ new edge router</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Status</th><th>Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-routers"></tbody></table>
+    </div>
+
+    <!-- ============== POLICIES ============== -->
+    <div class="page" id="page-policies">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span></span>
+        <button class="btn btn-primary" onclick="showCreateModal('service-policy')">+ new service policy</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Type</th><th>Identity Roles</th><th>Service Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-policies"></tbody></table>
+    </div>
+
+    <!-- ============== TERMINATORS ============== -->
+    <div class="page" id="page-terminators">
+      <table><thead><tr><th>Service</th><th>Router</th><th>Binding</th><th>Address</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-terminators"></tbody></table>
+    </div>
+
+    <!-- ============== TRANSIT ROUTERS ============== -->
+    <div class="page" id="page-transit-routers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="transit-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('transit-router')">+ new transit router</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Status</th><th>Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-transit-routers"></tbody></table>
+    </div>
+
+    <!-- ============== EDGE ROUTER POLICIES ============== -->
+    <div class="page" id="page-edge-router-policies">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="erp-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('edge-router-policy')">+ new policy</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Semantic</th><th>Identity Roles</th><th>Router Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-erp"></tbody></table>
+    </div>
+
+    <!-- ============== SERVICE EDGE ROUTER POLICIES ============== -->
+    <div class="page" id="page-serp">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="serp-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('serp')">+ new policy</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Semantic</th><th>Service Roles</th><th>Router Roles</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-serp"></tbody></table>
+    </div>
+
+    <!-- ============== AUTH POLICIES ============== -->
+    <div class="page" id="page-auth-policies">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="auth-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('auth-policy')">+ new auth policy</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Primary</th><th>Secondary</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-auth-policies"></tbody></table>
+    </div>
+
+    <!-- ============== POSTURE CHECKS ============== -->
+    <div class="page" id="page-posture-checks">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="posture-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('posture-check')">+ new posture check</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Type</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-posture-checks"></tbody></table>
+    </div>
+
+    <!-- ============== CERT AUTHORITIES ============== -->
+    <div class="page" id="page-cert-authorities">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="ca-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('cert-authority')">+ new CA</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Fingerprint</th><th>Is Auto CA</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-cas"></tbody></table>
+    </div>
+
+    <!-- ============== EXTERNAL JWT SIGNERS ============== -->
+    <div class="page" id="page-ext-jwt-signers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="jwt-summary"></span>
+        <button class="btn btn-primary" onclick="showCreateModal('ext-jwt-signer')">+ new JWT signer</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Issuer</th><th>Audience</th><th>Enabled</th><th style="width:240px">ID</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-jwt-signers"></tbody></table>
+    </div>
+
+    <!-- ============== API SESSIONS ============== -->
+    <div class="page" id="page-api-sessions">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="api-sess-summary"></span>
+        <input type="text" id="api-sess-filter" placeholder="filter..." class="fb-input" style="width:200px;font-size:0.6875rem" oninput="renderApiSessions()">
+      </div>
+      <table><thead><tr><th>Identity</th><th>Token</th><th>Created</th><th>Last Activity</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-api-sessions"></tbody></table>
+    </div>
+
+    <!-- ============== SESSIONS ============== -->
+    <div class="page" id="page-sessions">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="sess-summary"></span>
+        <input type="text" id="sess-filter" placeholder="filter..." class="fb-input" style="width:200px;font-size:0.6875rem" oninput="renderSessions()">
+      </div>
+      <table><thead><tr><th>Service</th><th>Identity</th><th>Type</th><th>Created</th><th style="width:80px"></th></tr></thead>
+      <tbody id="tb-sessions"></tbody></table>
+    </div>
+
+    <!-- ============== FABRIC / PROFILES ============== -->
+    <!-- ============== TUNNELS ============== -->
+    <div class="page" id="page-fabric-tunnels">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="tunnels-summary"></span>
+        <button class="btn btn-primary" onclick="showProfileBuilder('tunnel')">+ new tunnel profile</button>
+      </div>
+      <div id="tunnel-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-bottom:1.5rem"></div>
+      <div class="workflow-area" id="unassigned-section" style="display:none">
+        <h3>Unassigned Identities</h3>
+        <div id="unassigned-list" style="max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- ============== CONTROLLERS ============== -->
+    <div class="page" id="page-fabric-controllers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="controllers-summary"></span>
+        <button class="btn btn-primary" onclick="showProfileBuilder('controller')">+ new controller profile</button>
+      </div>
+      <div id="controller-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-bottom:1.5rem"></div>
+    </div>
+
+    <!-- ============== FABRIC ROUTERS ============== -->
+    <div class="page" id="page-fabric-routers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="fab-routers-summary"></span>
+        <button class="btn btn-primary" onclick="showRouterBuilder()">+ configure router</button>
+      </div>
+      <div id="fab-router-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-bottom:1.5rem"></div>
+    </div>
+
+    <!-- ============== PLUGINS ============== -->
+    <div class="page" id="page-plugins">
+      <div class="stats" style="margin-bottom:1rem">
+        <div class="stat-card"><div class="label">Plugins Loaded</div><div class="value" id="sp-count">-</div></div>
+        <div class="stat-card"><div class="label">Total Actions</div><div class="value" id="sp-actions">-</div></div>
+      </div>
+      <div class="plugin-grid" id="plugin-grid"></div>
+    </div>
+
+    <!-- ============== ENROLLMENTS ============== -->
+    <div class="page" id="page-enrollments">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span style="font-size:0.75rem;color:#555" id="enroll-summary"></span>
+          <span id="enroll-pending-badge" style="display:none;font-size:0.625rem;color:#000;background:var(--yellow);padding:0.125rem 0.5rem;border-radius:3px;font-weight:bold"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <select id="enroll-filter" class="fb-input" style="width:140px;font-size:0.6875rem" onchange="renderEnrollments()">
+            <option value="">all</option>
+            <option value="pending">pending</option>
+            <option value="auto_approved">auto approved</option>
+            <option value="approved">approved</option>
+            <option value="denied">denied</option>
+            <option value="rejected">rejected</option>
+          </select>
+          <button class="btn" onclick="loadEnrollments()">refresh</button>
+        </div>
+      </div>
+      <div class="stats" style="margin-bottom:1rem">
+        <div class="stat-card"><div class="label">Pending</div><div class="value" id="es-pending" style="color:var(--yellow)">-</div></div>
+        <div class="stat-card"><div class="label">Auto Approved</div><div class="value" id="es-auto">-</div></div>
+        <div class="stat-card"><div class="label">Approved</div><div class="value" id="es-approved">-</div></div>
+        <div class="stat-card"><div class="label">Denied</div><div class="value" id="es-denied" style="color:var(--red)">-</div></div>
+        <div class="stat-card"><div class="label">Rejected</div><div class="value" id="es-rejected" style="color:#555">-</div></div>
+      </div>
+      <div id="tb-enrollments" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem"></div>
+      <div id="enroll-empty" style="display:none;text-align:center;color:#333;font-size:0.75rem;padding:3rem">no pending enrollments</div>
+    </div>
+
+    <!-- ============== TELEMETRY ============== -->
+    <div class="page" id="page-telemetry">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-size:0.75rem;color:#555" id="telemetry-summary"></span>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <input type="text" id="telemetry-filter" placeholder="filter machines..." class="fb-input" style="width:200px;font-size:0.6875rem" oninput="renderTelemetry()">
+          <button class="btn" onclick="loadTelemetry()">refresh</button>
+          <button class="btn" onclick="flushTelemetry()">flush to db</button>
+        </div>
+      </div>
+      <div id="telemetry-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0.75rem"></div>
+      <div id="telemetry-empty" style="display:none;text-align:center;color:#333;font-size:0.75rem;padding:3rem">no live telemetry — waiting for machines to report in</div>
+    </div>
+
+    <!-- ============== WORKFLOWS ============== -->
+    <div class="page" id="page-workflows">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+
+        <!-- Left: action picker -->
+        <div>
+          <div class="workflow-area">
+            <h3>Available Actions</h3>
+            <input type="text" id="action-search" placeholder="filter actions..."
+              style="width:100%;padding:0.375rem 0.5rem;background:var(--bg);border:1px solid var(--border);
+              color:var(--fg);font-family:var(--mono);font-size:0.6875rem;border-radius:4px;margin-bottom:0.5rem;">
+            <div id="action-list" style="max-height:500px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- Right: workflow builder -->
+        <div>
+          <div class="workflow-area">
+            <h3>Workflow</h3>
+            <div id="wf-steps"></div>
+            <div class="wf-empty" id="wf-empty">Click an action to add it</div>
+            <div class="wf-actions">
+              <button class="btn" onclick="clearWorkflow()">clear</button>
+              <button class="btn" onclick="validateWorkflow()">validate</button>
+              <button class="btn btn-primary" onclick="compileWorkflow('shell')">compile bash</button>
+              <button class="btn" onclick="compileWorkflow('woodpecker')">compile woodpecker</button>
+            </div>
+            <pre class="output" id="wf-output"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Profile Builder Modal -->
+<div class="modal-overlay" id="profile-builder-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="pb-title">New Profile</h2>
+      <button class="modal-close" onclick="hideProfileBuilder()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div>
+          <label class="fb-label">Name</label>
+          <input type="text" id="pb-name" class="fb-input" placeholder="e.g. edge-node">
+          <label class="fb-label">Description</label>
+          <input type="text" id="pb-desc" class="fb-input" placeholder="What this profile is for">
+          <label class="fb-label">Identity Role <span style="color:#333">(the single tag machines get)</span></label>
+          <select id="pb-identity-role" class="fb-input"><option value="">loading...</option></select>
+          <label class="fb-label">Auth Policy</label>
+          <select id="pb-auth-policy" class="fb-input"><option value="Default">Default</option></select>
+          <label class="fb-label">Promotes To <span style="color:#333">(optional)</span></label>
+          <select id="pb-promotes-to" class="fb-input"><option value="">(none)</option></select>
+        </div>
+        <div>
+          <label class="fb-label">Edge Router Access</label>
+          <div id="pb-router-roles" class="fb-checklist"></div>
+          <label class="fb-label">Service Bind Roles <span style="color:#333">(what it hosts)</span></label>
+          <div id="pb-bind-roles" class="fb-checklist"></div>
+          <label class="fb-label">Service Dial Roles <span style="color:#333">(what it can reach)</span></label>
+          <div id="pb-dial-roles" class="fb-checklist"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.75rem;margin-top:0.75rem">
+        <div><label class="fb-label">Strategy</label><select id="pb-strategy" class="fb-input"><option value="smartrouting">smartrouting</option><option value="weighted">weighted</option><option value="random">random</option><option value="ha">ha</option></select></div>
+        <div><label class="fb-label">Hosting Cost</label><input type="number" id="pb-cost" class="fb-input" value="0" min="0" max="65535"></div>
+        <div><label class="fb-label">Precedence</label><select id="pb-precedence" class="fb-input"><option value="default">default</option><option value="required">required</option><option value="failed">failed</option></select></div>
+        <div><label class="fb-label">Heartbeat</label><select id="pb-heartbeat" class="fb-input"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn btn-primary" onclick="saveProfile()">save profile</button>
+        <button class="btn" onclick="hideProfileBuilder()">cancel</button>
+        <span id="pb-status" style="font-size:0.6875rem;color:#555;line-height:2"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Router Builder Modal -->
+<div class="modal-overlay" id="router-builder-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Configure Router</h2>
+      <button class="modal-close" onclick="hideRouterBuilder()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label class="fb-label">Router</label>
+      <select id="rb-router" class="fb-input"><option value="">loading...</option></select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.5rem">
+        <div>
+          <label class="fb-label">Cost <span style="color:#333">(0-65535, lower = preferred)</span></label>
+          <input type="number" id="rb-cost" class="fb-input" value="0" min="0" max="65535">
+          <label class="fb-label">Traversal</label>
+          <select id="rb-traversal" class="fb-input"><option value="true">enabled (route through)</option><option value="false">disabled (endpoint only)</option></select>
+          <label class="fb-label">Built-in Tunneler</label>
+          <select id="rb-tunneler" class="fb-input"><option value="false">disabled</option><option value="true">enabled</option></select>
+          <label class="fb-label">Disabled</label>
+          <select id="rb-disabled" class="fb-input"><option value="false">active</option><option value="true">disabled</option></select>
+        </div>
+        <div>
+          <label class="fb-label">Role Attributes</label>
+          <div id="rb-roles" class="fb-checklist" style="max-height:200px"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn btn-primary" onclick="saveRouter()">save</button>
+        <button class="btn" onclick="hideRouterBuilder()">cancel</button>
+        <span id="rb-status" style="font-size:0.6875rem;color:#555;line-height:2"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Identity Detail Modal -->
+<div class="modal-overlay" id="identity-detail-modal">
+  <div class="modal-content" style="width:560px">
+    <div class="modal-header">
+      <h2 id="id-detail-name">Identity</h2>
+      <button class="modal-close" onclick="document.getElementById('identity-detail-modal').classList.remove('open')">&times;</button>
+    </div>
+    <div class="modal-body" id="id-detail-body">
+      <div style="text-align:center;color:#444;padding:2rem">loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Enrollment Detail Modal -->
+<div class="modal-overlay" id="enrollment-detail-modal">
+  <div class="modal-content" style="width:680px">
+    <div class="modal-header">
+      <h2 id="ed-title">Enrollment</h2>
+      <button class="modal-close" onclick="document.getElementById('enrollment-detail-modal').classList.remove('open')">&times;</button>
+    </div>
+    <div class="modal-body" id="ed-body">
+      <div style="text-align:center;color:#444;padding:2rem">loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Apply Profile Modal -->
+<div class="modal-overlay" id="apply-modal">
+  <div class="modal-content" style="width:480px">
+    <div class="modal-header">
+      <h2>Apply Profile: <span id="apply-profile-name"></span></h2>
+      <button class="modal-close" onclick="hideApplyModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="apply-search" placeholder="search identities..." class="fb-input" style="margin-bottom:0.5rem">
+      <div id="apply-identity-list" style="max-height:400px;overflow-y:auto"></div>
+      <div id="apply-status" style="font-size:0.6875rem;color:#555;margin-top:0.5rem;min-height:1.25rem"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== CREATE MODAL ============== -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal-content" style="width:520px">
+    <div class="modal-header">
+      <h2 id="create-modal-title">Create</h2>
+      <button class="modal-close" onclick="closeCreateModal()">×</button>
+    </div>
+    <div class="modal-body" id="create-modal-body"></div>
+    <div style="padding:1rem 1.25rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;justify-content:flex-end">
+      <button class="btn" onclick="closeCreateModal()">cancel</button>
+      <button class="btn btn-primary" id="create-modal-submit" onclick="submitCreateModal()">create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== JWT DISPLAY MODAL ============== -->
+<div class="modal-overlay" id="jwt-modal">
+  <div class="modal-content" style="width:560px">
+    <div class="modal-header">
+      <h2>Enrollment JWT</h2>
+      <button class="modal-close" onclick="document.getElementById('jwt-modal').classList.remove('open')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.75rem;color:#888;margin-bottom:1rem">Copy this JWT token and use it to enroll the identity. It expires in 24 hours.</p>
+      <textarea id="jwt-display" readonly style="width:100%;height:120px;background:#080808;border:1px solid var(--border);color:var(--accent);font-family:var(--mono);font-size:0.625rem;padding:0.5rem;border-radius:4px;resize:none"></textarea>
+      <button class="btn btn-primary" style="margin-top:0.75rem;width:100%" onclick="copyJWT()">copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== MACHINE DETAIL MODAL ============== -->
+<div class="modal-overlay" id="machine-modal">
+  <div class="modal-content" style="width:740px;max-height:88vh;overflow-y:auto">
+    <div class="modal-header">
+      <div>
+        <h2 id="mm-nickname" style="margin-bottom:0.2rem"></h2>
+        <span id="mm-hostname" style="font-size:0.75rem;color:#555"></span>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <span id="mm-stage-badge" class="tag" style="font-size:0.625rem"></span>
+        <span id="mm-class-badge" class="tag tag-blue" style="font-size:0.625rem"></span>
+        <span id="mm-online-dot" class="dot"></span>
+        <button class="modal-close" onclick="closeMachineModal()">×</button>
+      </div>
+    </div>
+    <div class="modal-body">
+
+      <!-- Overview -->
+      <div style="margin-bottom:1.25rem">
+        <div class="nav-section" style="padding:0 0 0.375rem">Overview</div>
+        <div id="mm-overview" style="display:grid;grid-template-columns:1fr 1fr;gap:0.25rem 1.5rem"></div>
+      </div>
+
+      <!-- Hardware -->
+      <div style="margin-bottom:1.25rem">
+        <div class="nav-section" style="padding:0 0 0.375rem">Hardware</div>
+        <div id="mm-hardware" style="display:grid;grid-template-columns:1fr 1fr;gap:0.25rem 1.5rem"></div>
+      </div>
+
+      <!-- Network -->
+      <div style="margin-bottom:1.25rem">
+        <div class="nav-section" style="padding:0 0 0.375rem">Network</div>
+        <div id="mm-network" style="display:grid;grid-template-columns:1fr 1fr;gap:0.25rem 1.5rem"></div>
+      </div>
+
+      <!-- Live Telemetry -->
+      <div>
+        <div class="nav-section" style="padding:0 0 0.375rem">
+          Live
+          <span id="mm-live-age" style="font-size:0.5625rem;color:#444;margin-left:0.5rem;font-weight:normal"></span>
+        </div>
+        <div id="mm-live-empty" style="font-size:0.75rem;color:#333;padding:1rem 0">
+          No live telemetry — agent may not be running
+        </div>
+        <div id="mm-live-stats" style="display:none;gap:0.75rem">
+          <div class="stat-card" style="margin-bottom:0.5rem">
+            <div class="label">CPU</div>
+            <div style="background:#161616;border-radius:3px;height:6px;margin-top:0.25rem">
+              <div id="mm-cpu-bar" style="height:6px;border-radius:3px;background:var(--accent);transition:width 0.5s"></div>
+            </div>
+            <div id="mm-cpu-val" class="sub" style="margin-top:0.25rem"></div>
+          </div>
+          <div class="stat-card" style="margin-bottom:0.5rem">
+            <div class="label">Memory</div>
+            <div style="background:#161616;border-radius:3px;height:6px;margin-top:0.25rem">
+              <div id="mm-mem-bar" style="height:6px;border-radius:3px;background:var(--blue);transition:width 0.5s"></div>
+            </div>
+            <div id="mm-mem-val" class="sub" style="margin-top:0.25rem"></div>
+          </div>
+          <div id="mm-disk-stats"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+  <script src="app.js"></script>
+</body>
+</html>

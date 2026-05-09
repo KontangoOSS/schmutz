@@ -1,0 +1,68 @@
+# Secrets
+.env.*
+!.env.example
+!.env
+*.key
+*.pem
+*.p12
+
+# Go
+bin/
+build/
+dist/
+vendor/
+*.exe
+*.test
+*.out
+*.prof
+
+# Project compiled binary (built by `make build` / Dockerfile)
+/neverland
+
+# Node / Frontend
+node_modules/
+.next/
+.nuxt/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Rust
+target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts (not build/ dir itself — contains Dockerfiles)
+tmp/
+*.bak
+
+# Coverage
+coverage/
+*.cover
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Secrets (Phase)
+.secrets.env
+
+# CI outputs
+.ci-discover.env
+.ci-env

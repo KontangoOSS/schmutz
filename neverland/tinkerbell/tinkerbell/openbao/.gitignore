@@ -1,0 +1,64 @@
+# Secrets
+.env.*
+!.env.example
+!.env
+*.key
+*.pem
+*.p12
+
+# Go
+bin/
+vendor/
+*.exe
+*.test
+*.out
+*.prof
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+.nuxt/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Rust
+target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts (not build/ dir itself — contains Dockerfiles)
+tmp/
+*.bak
+
+# Coverage
+coverage/
+*.cover
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Secrets (Phase)
+.secrets.env
+
+# CI outputs
+.ci-discover.env
+.ci-env

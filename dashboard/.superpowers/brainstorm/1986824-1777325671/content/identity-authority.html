@@ -1,0 +1,60 @@
+<h2>Where does identity live?</h2>
+<p class="subtitle">You have four systems that can own an identity record. Before we design naming standards and tagging, we need to agree on which one is authoritative for each identity type.</p>
+
+<div style="margin: 24px 0 32px 0; padding: 20px; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+  <h3 style="margin:0 0 12px 0; font-size:14px; text-transform:uppercase; letter-spacing:1px; opacity:0.6;">Current systems</h3>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+    <div style="padding:12px; background:rgba(99,102,241,0.15); border-radius:6px; border:1px solid rgba(99,102,241,0.3);">
+      <strong>Ziti</strong><br><span style="opacity:0.7; font-size:13px;">Network identity + access policy. Every enrolled machine/service gets a cert. Controls who can reach what.</span>
+    </div>
+    <div style="padding:12px; background:rgba(16,185,129,0.15); border-radius:6px; border:1px solid rgba(16,185,129,0.3);">
+      <strong>Bao</strong><br><span style="opacity:0.7; font-size:13px;">Secrets + service catalog. AppRole per service, entity aliases, policy enforcement. Knows what each service is allowed to read.</span>
+    </div>
+    <div style="padding:12px; background:rgba(245,158,11,0.15); border-radius:6px; border:1px solid rgba(245,158,11,0.3);">
+      <strong>Zitadel</strong><br><span style="opacity:0.7; font-size:13px;">Human SSO + OIDC. Manages human users, OIDC clients per app, SCIM-capable. Proxmox + Forgejo already federate to it.</span>
+    </div>
+    <div style="padding:12px; background:rgba(239,68,68,0.15); border-radius:6px; border:1px solid rgba(239,68,68,0.3);">
+      <strong>Proxmox / Forgejo</strong><br><span style="opacity:0.7; font-size:13px;">Platform identity. VMs/LXCs have IDs, Forgejo has users + org memberships. Both can consume SCIM from Zitadel.</span>
+    </div>
+  </div>
+</div>
+
+<p style="margin-bottom:16px; font-weight:500;">Which model fits how you think about this?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Zitadel is the authority — everything federates to it</h3>
+      <p>Humans, services, and machines all have a Zitadel identity. Ziti gets OIDC tokens from Zitadel. Bao trusts Zitadel via JWT auth. Proxmox/Forgejo get SCIM-synced users. One login, one place to revoke.</p>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Single source of truth</li><li>Revocation is immediate everywhere</li><li>SCIM already supported</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Zitadel becomes a critical dependency</li><li>Machine identities feel awkward in an SSO system</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Split authority — Ziti owns machines, Zitadel owns humans</h3>
+      <p>Machines enroll via Ziti OTT (cert-based, no password). Humans authenticate via Zitadel OIDC. Bao trusts both. Services register in Bao catalog with a Ziti identity. Proxmox/Forgejo federate to Zitadel for humans only.</p>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Right tool for each identity type</li><li>Machine enrollment doesn't depend on SSO being up</li><li>Clean separation of concerns</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two systems to maintain</li><li>Need a mapping layer (Bao entity aliases) to link them</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Bao is the registry — others are consumers</h3>
+      <p>Bao entity catalog is the master record for all identities (humans, machines, services). Ziti identities, Zitadel users, and Proxmox VMs all get an entity alias in Bao. The catalog is the join table.</p>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Bao already has the service catalog</li><li>Policy is colocated with identity</li><li>One audit log</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Bao is a secrets store, not an IdP</li><li>Human lifecycle management is awkward</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

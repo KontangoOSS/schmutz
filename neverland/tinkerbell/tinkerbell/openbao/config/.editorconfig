@@ -1,0 +1,37 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.go]
+indent_style = tab
+indent_size = 4
+
+[*.{js,ts,tsx,vue,css,html,json,yaml,yml}]
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Dockerfile*]
+indent_style = space
+indent_size = 4
+
+[*.sql]
+indent_style = space
+indent_size = 4
+
+[Caddyfile*]
+indent_style = space
+indent_size = 4
