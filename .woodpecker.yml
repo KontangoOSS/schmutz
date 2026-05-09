@@ -1,11 +1,51 @@
 steps:
-  - name: build
-    image: golang:1.25
-    commands:
-      - cd agent && go build ./...
+  # Umbrella CI — verifies all sub-modules build and test.
+  # Each sub-module also has its own .woodpecker.yml for per-repo CI.
 
-  - name: test
-    image: golang:1.25
+  - name: test-shared
+    image: golang:1.25-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
     commands:
-      - cd agent && go test ./...
-      - cd shared && go test ./...
+      - apk add --no-cache git ca-certificates -q
+      - cd ../schmutz-shared && go mod download && go test ./...
+
+  - name: test-enroll
+    image: golang:1.25-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd ../schmutz-enroll && go mod download && go test ./...
+
+  - name: test-agent
+    image: golang:1.26-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git gcc musl-dev ca-certificates -q
+      - cd ../schmutz-agent && go mod download && go test ./...
+
+  - name: test-controller
+    image: golang:1.25-alpine
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd ../schmutz-controller && go test ./...
+
+  - name: build-enroll
+    image: golang:1.25-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd ../schmutz-enroll && go build ./cmd/enroll-server/
+
+  - name: build-controller
+    image: golang:1.25-alpine
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd ../schmutz-controller && go build ./cmd/schmutz-controller/
