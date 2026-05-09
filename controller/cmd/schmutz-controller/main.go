@@ -154,28 +154,52 @@ func main() {
 	enrollMod.Profiles = profileRegistry
 	api.enrollMod = enrollMod // wire after construction — enrollMod depends on clients built above
 
-	mux := http.NewServeMux()
-	routes(mux, api, ziti)
+	// Debug mux — all routes, localhost-only, no Ziti required.
+	mux := muxAll(api, ziti)
 
 	// --- Start listeners ---
 
-	// Ziti listeners — management API + agent services (full access)
+	// Ziti listeners — one per logical service, each on its own local port.
 	if cfg.ZitiIdentity != "" {
 		zt, err := service.NewZitiTransport(cfg.ZitiIdentity)
 		if err != nil {
 			log.Printf("ziti transport: %v (overlay listeners disabled)", err)
 		} else {
-			// Management API (dark service — only reachable via overlay)
-			if cfg.ZitiServiceName != "" {
+			// Per-service management API listeners.
+			// Each binds a Ziti service and a dedicated localhost port.
+			// Dial policies are managed in Ziti (not enforced here).
+			type svcDef struct {
+				name string
+				addr string
+				mux  *http.ServeMux
+			}
+			svcs := []svcDef{
+				{SvcZitiAdmin, PortZiti, func() *http.ServeMux { m := http.NewServeMux(); registerZiti(m, api, ziti); return m }()},
+				{SvcBaoAdmin, PortBao, func() *http.ServeMux { m := http.NewServeMux(); registerBao(m, api); return m }()},
+				{SvcIdentityAdmin, PortIdentity, func() *http.ServeMux { m := http.NewServeMux(); registerIdentity(m, api); return m }()},
+				{SvcMachineAPI, PortMachine, func() *http.ServeMux { m := http.NewServeMux(); registerMachine(m, api); return m }()},
+				{SvcMetrics, PortMetrics, func() *http.ServeMux { m := http.NewServeMux(); registerMetrics(m, api); return m }()},
+				{SvcCatalogAPI, PortCatalog, func() *http.ServeMux { m := http.NewServeMux(); registerCatalog(m, api); return m }()},
+				{SvcSecurityAPI, PortSecurity, func() *http.ServeMux { m := http.NewServeMux(); registerSecurity(m, api); return m }()},
+			}
+			for _, s := range svcs {
+				s := s // capture
+				// Local port listener — also serves direct localhost callers.
 				go func() {
-					listener, err := zt.Listen(cfg.ZitiServiceName)
+					if err := http.ListenAndServe(s.addr, s.mux); err != nil {
+						log.Printf("%s local listener %s: %v", s.name, s.addr, err)
+					}
+				}()
+				// Ziti overlay listener — same mux, overlay-encrypted transport.
+				go func() {
+					ln, err := zt.Listen(s.name)
 					if err != nil {
-						log.Printf("ziti listen %q: %v", cfg.ZitiServiceName, err)
+						log.Printf("ziti listen %q: %v", s.name, err)
 						return
 					}
-					log.Printf("management API dark on ziti service %q", cfg.ZitiServiceName)
-					if err := http.Serve(listener, mux); err != nil {
-						log.Printf("ziti serve: %v", err)
+					log.Printf("controller: %s listening on overlay + %s", s.name, s.addr)
+					if err := http.Serve(ln, s.mux); err != nil {
+						log.Printf("ziti serve %s: %v", s.name, err)
 					}
 				}()
 			}
