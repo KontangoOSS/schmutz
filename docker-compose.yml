@@ -26,7 +26,10 @@ services:
     environment:
       - ZITI_USER=${ZITI_ADMIN_USER:-admin}
       - ZITI_PWD=${ZITI_ADMIN_PASS:-Admin1234!}
-      - ZITI_CTRL_ADVERTISED_ADDRESS=${ZITI_HOST:-localhost}
+      # Advertise as 'ziti' so the enrollment JWT ztAPI points at the
+      # Docker service name, reachable by both enroll-server and agents
+      # inside the compose network. For production use a real hostname.
+      - ZITI_CTRL_ADVERTISED_ADDRESS=${ZITI_HOST:-ziti}
       - ZITI_CTRL_ADVERTISED_PORT=6262
       - ZITI_CTRL_BIND_ADDRESS=0.0.0.0
       - ZITI_CTRL_EDGE_BIND_PORT=6262
@@ -101,6 +104,9 @@ services:
       - FORGEJO_ORG=public
       - HUB_ADMIN_TOKEN=${HUB_ADMIN_TOKEN:-dev-admin-token}
       - AGENT_BAO_ADDR=http://bao:8200
+      # In compose agents come from the Docker bridge (172.x.x.x), not loopback.
+      # Production keeps 127.0.0.0/8 since agents reach Bao via Ziti overlay.
+      - BAO_LOGIN_CIDR=${BAO_LOGIN_CIDR:-0.0.0.0/0}
     depends_on:
       - bao
       - ziti

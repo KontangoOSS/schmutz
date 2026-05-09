@@ -73,6 +73,21 @@ echo "Mounting KV v2 at secret/..."
 docker compose exec -T bao sh -c "BAO_TOKEN=$ROOT_TOKEN bao secrets enable -path=secret -version=2 kv" 2>/dev/null || \
   echo "(secret/ already mounted)"
 
+# Enable auth methods needed by enroll-server
+# Note: no trailing slash — that's the listing format, not the enable path
+echo "Enabling approle auth..."
+docker compose exec -T bao sh -c "BAO_TOKEN=$ROOT_TOKEN bao auth enable approle" 2>/dev/null || \
+  echo "(approle already enabled)"
+
+echo "Enabling jwt auth..."
+docker compose exec -T bao sh -c "BAO_TOKEN=$ROOT_TOKEN bao auth enable jwt" 2>/dev/null || \
+  echo "(jwt already enabled)"
+
+echo "Enabling identity secrets engine (for OIDC)..."
+# Already enabled by default, but ensure it's there
+docker compose exec -T bao sh -c "BAO_TOKEN=$ROOT_TOKEN bao secrets list" 2>/dev/null | grep -q "identity" || \
+  echo "(identity already enabled)"
+
 # Patch .env
 if [ -f .env ]; then
   # Remove old values if present
