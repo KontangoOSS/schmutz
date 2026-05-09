@@ -1,24 +1,12 @@
 steps:
-  # Umbrella CI — verifies all sub-modules build and test.
-  # Each sub-module also has its own .woodpecker.yml for per-repo CI.
-
   - name: test-shared
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     environment:
       GONOSUMDB: git.konoss.org
       GOPROXY: direct,https://proxy.golang.org
     commands:
       - apk add --no-cache git ca-certificates -q
-      - cd ../schmutz-shared && go mod download && go test ./...
-
-  - name: test-enroll
-    image: golang:1.25-alpine
-    environment:
-      GONOSUMDB: git.konoss.org
-      GOPROXY: direct,https://proxy.golang.org
-    commands:
-      - apk add --no-cache git ca-certificates -q
-      - cd ../schmutz-enroll && go mod download && go test ./...
+      - cd shared && go mod download && go test ./...
 
   - name: test-agent
     image: golang:1.26-alpine
@@ -27,25 +15,49 @@ steps:
       GOPROXY: direct,https://proxy.golang.org
     commands:
       - apk add --no-cache git gcc musl-dev ca-certificates -q
-      - cd ../schmutz-agent && go mod download && go test ./...
+      - cd agent && go mod download && go test ./...
 
-  - name: test-controller
-    image: golang:1.25-alpine
-    commands:
-      - apk add --no-cache git ca-certificates -q
-      - cd ../schmutz-controller && go test ./...
-
-  - name: build-enroll
-    image: golang:1.25-alpine
+  - name: test-enroll
+    image: golang:1.26-alpine
     environment:
       GONOSUMDB: git.konoss.org
       GOPROXY: direct,https://proxy.golang.org
     commands:
       - apk add --no-cache git ca-certificates -q
-      - cd ../schmutz-enroll && go build ./cmd/enroll-server/
+      - cd enroll && go mod download && go test ./...
 
-  - name: build-controller
-    image: golang:1.25-alpine
+  - name: test-controller
+    image: golang:1.26-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
     commands:
       - apk add --no-cache git ca-certificates -q
-      - cd ../schmutz-controller && go build ./cmd/schmutz-controller/
+      - cd controller && go mod download && go test ./...
+
+  - name: build-agent
+    image: golang:1.26-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git gcc musl-dev ca-certificates -q
+      - cd agent && go build ./cmd/schmutz/
+
+  - name: build-enroll
+    image: golang:1.26-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd enroll && go build ./cmd/enroll-server/
+
+  - name: build-controller
+    image: golang:1.26-alpine
+    environment:
+      GONOSUMDB: git.konoss.org
+      GOPROXY: direct,https://proxy.golang.org
+    commands:
+      - apk add --no-cache git ca-certificates -q
+      - cd controller && go build ./cmd/schmutz-controller/

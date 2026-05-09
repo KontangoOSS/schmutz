@@ -27,3 +27,8 @@ Thumbs.db
 *~
 *.enc
 .bao-credentials
+
+# Root-level compiled binaries (build to bin/ instead)
+enroll-server
+schmutz-controller
+schmutz
