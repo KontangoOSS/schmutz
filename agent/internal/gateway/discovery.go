@@ -56,7 +56,24 @@ func Discover(ctx context.Context, cfg DiscoverConfig) ([]ServiceEntry, error) {
 			DiscoveredAt: time.Now().UTC(),
 		}
 
-		// 1. Try the explicit spec hint URL first.
+		// 1. Try the named plugin — knows app-specific paths and auth.
+		if svc.Plugin != "" {
+			if p := LookupPlugin(svc.Plugin); p != nil {
+				if spec, err := p.FetchSpec(ctx, svc.Port); err == nil {
+					entry.SpecJSON = spec
+					entry.SpecSource = "openapi"
+					entry.EndpointCount = countPaths(spec)
+					entries = append(entries, entry)
+					continue
+				} else {
+					log.Printf("gateway: plugin %q for %s: %v", svc.Plugin, svc.Name, err)
+				}
+			} else {
+				log.Printf("gateway: unknown plugin %q for service %s", svc.Plugin, svc.Name)
+			}
+		}
+
+		// 2. Try the explicit spec hint URL.
 		if svc.Spec != "" {
 			if spec, err := fetchSpecBytes(ctx, svc.Spec); err == nil {
 				entry.SpecJSON = spec
@@ -67,7 +84,7 @@ func Discover(ctx context.Context, cfg DiscoverConfig) ([]ServiceEntry, error) {
 			}
 		}
 
-		// 2. Probe well-known OpenAPI paths on the port.
+		// 3. Probe well-known OpenAPI paths on the port.
 		if spec, err := probeSpecOnPort(ctx, svc.Port); err == nil {
 			entry.SpecJSON = spec
 			entry.SpecSource = "openapi"
@@ -76,7 +93,7 @@ func Discover(ctx context.Context, cfg DiscoverConfig) ([]ServiceEntry, error) {
 			continue
 		}
 
-		// 3. Fall back to stub generator.
+		// 4. Fall back to stub generator.
 		target := discover.ServiceTarget{
 			Port:     svc.Port,
 			Protocol: "http",

@@ -1,25 +1,13 @@
 go 1.26
 
-// Umbrella workspace — references sibling repo checkouts for cross-cutting
-// development. Each module lives in its own repo; this file lets you work
-// across all four without publishing to a registry.
-//
-// Expected directory layout (siblings under ~/git/kore/):
-//   schmutz-agent/
-//   schmutz-enroll/
-//   schmutz-controller/     (local checkout is schmutz-controller-new/)
-//   schmutz-shared/
-//   schmutz/                (this repo — the umbrella)
-//
-// Usage:
-//   cd ~/git/kore/schmutz
-//   go work sync
-//   go build git.konoss.org/kore/schmutz-agent/cmd/schmutz
-//   go build git.konoss.org/kore/schmutz-enroll/cmd/enroll-server
+// Consolidated schmutz workspace — all modules live in this repo.
+// agent/, enroll/, controller/, shared/ are the canonical locations.
+// The sibling repos (schmutz-agent, schmutz-enroll, schmutz-shared,
+// schmutz-controller-new) are being retired.
 
 use (
-	../schmutz-agent
-	../schmutz-controller-new
-	../schmutz-enroll
-	../schmutz-shared
+	./agent
+	./controller
+	./enroll
+	./shared
 )

@@ -157,6 +157,11 @@ type GatewayService struct {
 	Port uint16 `json:"port" yaml:"port"`
 	// Spec is an optional URL hint for the OpenAPI spec location.
 	Spec string `json:"spec,omitempty" yaml:"spec,omitempty"`
+	// Plugin names a built-in spec resolver for well-known apps.
+	// Takes precedence over Spec and the well-known-path probe.
+	// Supported values: "forgejo", "grafana", "zitadel", "woodpecker",
+	// "inventree", "konmail".
+	Plugin string `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // Bind declares one overlay service this host binds.
