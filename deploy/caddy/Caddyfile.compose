@@ -1,14 +1,10 @@
 {
   admin off
-
-  # For compose testing: use internal TLS (self-signed).
-  # For production: replace with acme_dns cloudflare <token>
-  # and set ZITI_CTRL_ADVERTISED_ADDRESS to the real hostname.
   local_certs
 
   layer4 {
     :443 {
-      # Ziti control plane — routed before any HTTP/TLS handling
+      # Ziti SDK ALPN connections
       @ziti-ctrl tls alpn ziti-ctrl
       route @ziti-ctrl {
         proxy ziti:6262
@@ -24,23 +20,53 @@
         proxy ziti:6262
       }
 
-      # Enroll hub — agent enrollment and hub API
-      @enroll tls sni enroll.*
+      # SNI: enroll endpoint → Caddy HTTPS vhost on :9443
+      @enroll tls sni enroll.schmutz.local
       route @enroll {
-        proxy enroll:8765
+        proxy localhost:9443
       }
 
-      # Management plane — controller admin APIs
-      @ctrl tls sni ctrl.*
+      # SNI: controller management plane → Caddy HTTPS vhost on :9444
+      @ctrl tls sni ctrl.schmutz.local
       route @ctrl {
-        proxy controller:3080
+        proxy localhost:9444
       }
 
-      # All other TLS falls through (catch-all)
+      # Default: all other TLS → Ziti
       @tls-any tls
       route @tls-any {
         proxy ziti:6262
       }
     }
   }
+}
+
+# ── Enroll vhost (:9443) ─────────────────────────────────────────────────
+enroll.schmutz.local:9443 {
+  tls internal
+
+  handle /agent.sh {
+    respond "#!/bin/sh\necho schmutz-agent-bootstrap" 200
+  }
+
+  handle /api/* {
+    reverse_proxy enroll:8765
+  }
+
+  handle /healthz {
+    reverse_proxy enroll:8765
+  }
+
+  respond "schmutz-enroll" 200
+}
+
+# ── Controller vhost (:9444) ─────────────────────────────────────────────
+ctrl.schmutz.local:9444 {
+  tls internal
+
+  handle /api/* {
+    reverse_proxy controller:3080
+  }
+
+  respond "schmutz-controller" 200
 }
