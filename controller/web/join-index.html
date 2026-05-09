@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kontango Platform - Join Network</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+    .logo {
+      display: inline-block;
+      width: 60px;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .section {
+      margin-bottom: 40px;
+    }
+    .section h2 {
+      font-size: 20px;
+      color: #0f172a;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section h2 span {
+      display: inline-flex;
+      width: 32px;
+      height: 32px;
+      background: #0f172a;
+      color: white;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .section p {
+      color: #475569;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+    .section ul {
+      list-style: none;
+      margin: 15px 0;
+    }
+    .section li {
+      color: #475569;
+      padding: 8px 0;
+      padding-left: 24px;
+      position: relative;
+    }
+    .section li:before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: #0f172a;
+      font-weight: bold;
+    }
+    .code-block {
+      background: #f1f5f9;
+      border-left: 4px solid #0f172a;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #0f172a;
+      overflow-x: auto;
+      margin: 15px 0;
+    }
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 25px;
+      flex-wrap: wrap;
+    }
+    .button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .button-primary {
+      background: #0f172a;
+      color: white;
+    }
+    .button-primary:hover {
+      background: #1e293b;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+    .button-secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .button-secondary:hover {
+      background: #cbd5e1;
+      transform: translateY(-2px);
+    }
+    .warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 15px;
+      border-radius: 4px;
+      color: #92400e;
+      margin: 15px 0;
+    }
+    .success {
+      background: #d1fae5;
+      border-left: 4px solid #10b981;
+      padding: 15px;
+      border-radius: 4px;
+      color: #065f46;
+      margin: 15px 0;
+    }
+    .footer {
+      background: #f8fafc;
+      padding: 20px 30px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
+    }
+    .terminal {
+      background: #0f172a;
+      color: #10b981;
+      padding: 20px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      margin: 15px 0;
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #0f172a;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: #f0f9ff;
+      border-left: 4px solid #0284c7;
+      border-radius: 4px;
+      color: #0c2d6b;
+      margin-bottom: 15px;
+    }
+    @media (max-width: 600px) {
+      .header {
+        padding: 30px 20px;
+      }
+      .header h1 {
+        font-size: 24px;
+      }
+      .content {
+        padding: 25px 20px;
+      }
+      .button-group {
+        flex-direction: column;
+      }
+      .button {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🌐</div>
+      <h1>Kontango Platform</h1>
+      <p>Secure Network Enrollment</p>
+    </div>
+
+    <div class="content">
+      <!-- Section 1: Welcome -->
+      <div class="section">
+        <h2><span>1</span> Welcome to Kontango</h2>
+        <p>
+          You're about to join the Kontango secure network platform. This script will:
+        </p>
+        <ul>
+          <li>Collect comprehensive device fingerprint data</li>
+          <li>Establish Ziti tunnel connectivity</li>
+          <li>Install the Kontango agent</li>
+          <li>Configure automatic health reporting</li>
+        </ul>
+      </div>
+
+      <!-- Section 2: What Gets Collected -->
+      <div class="section">
+        <h2><span>2</span> Data Collection</h2>
+        <p>
+          The installation script will collect detailed information about your system for device verification and secure enrollment. This includes:
+        </p>
+        <ul>
+          <li><strong>System identification:</strong> hostname, serial number, machine UUID, boot ID</li>
+          <li><strong>Operating system:</strong> version, kernel, architecture, timezone</li>
+          <li><strong>Hardware:</strong> CPU model, cores, RAM, disk serials, BIOS version</li>
+          <li><strong>Network:</strong> MAC addresses, DNS servers, gateway, open ports</li>
+          <li><strong>Security:</strong> SSH host keys, device fingerprint hashes</li>
+        </ul>
+        <p style="margin-top: 15px; font-size: 14px;">
+          <strong>All data is encrypted in transit (TLS/Ziti) and at rest (Bao).</strong>
+        </p>
+      </div>
+
+      <!-- Section 3: Installation Steps -->
+      <div class="section">
+        <h2><span>3</span> Installation Steps</h2>
+        <p>The installer will:</p>
+        <ul>
+          <li>Display the User Agreement (acknowledge with Y)</li>
+          <li>Collect system fingerprint</li>
+          <li>Enroll with the controller via SSE stream</li>
+          <li>Download Ziti tunnel binary</li>
+          <li>Start Ziti tunnel service</li>
+          <li>Download Kontango agent</li>
+          <li>Configure systemd services for automatic startup</li>
+          <li>Send progress updates via Ziti-authenticated channel</li>
+        </ul>
+      </div>
+
+      <!-- Section 4: Installation Command -->
+      <div class="section">
+        <h2><span>4</span> Install Now</h2>
+        <p>Copy and paste this command into your terminal:</p>
+
+        <div class="code-block">
+curl -fsSL https://join.kontango.io/install | sh
+        </div>
+
+        <p style="margin-top: 15px; font-size: 14px; color: #64748b;">
+          <strong>With auto-approval (skip ULA prompt):</strong>
+        </p>
+        <div class="code-block">
+curl -fsSL https://join.kontango.io/install | sh -y
+        </div>
+
+        <div class="warning">
+          <strong>⚠ Important:</strong> Always review the User Agreement before installation. The ULA explains what data is collected and how it's used.
+        </div>
+      </div>
+
+      <!-- Section 5: What Happens Next -->
+      <div class="section">
+        <h2><span>5</span> After Installation</h2>
+        <ul>
+          <li>Device enrolls with Ziti network overlay</li>
+          <li>SSH access available via Ziti (admin only)</li>
+          <li>Internal API accessible at {nickname}.tango:8080</li>
+          <li>Periodic health checks sent to controller</li>
+          <li>Real-time progress visible in controller dashboard</li>
+        </ul>
+      </div>
+
+      <!-- Section 6: Troubleshooting -->
+      <div class="section">
+        <h2><span>6</span> Troubleshooting</h2>
+        <p>If the installation fails:</p>
+        <div class="code-block">
+# View installation logs
+journalctl -u tango-tunnel.service -f
+journalctl -u tango-agent.service -f
+
+# Check Ziti tunnel status
+systemctl status tango-tunnel.service
+
+# Verify enrollment
+cat /opt/kontango/machine.json
+        </div>
+        <p style="margin-top: 15px;">
+          For support: <a href="https://github.com/KontangoOSS" target="_blank" style="color: #0284c7;">KontangoOSS GitHub</a>
+        </p>
+      </div>
+
+      <!-- Section 7: Privacy & Security -->
+      <div class="section">
+        <h2><span>7</span> Privacy & Security</h2>
+        <ul>
+          <li>✓ No data shared with third parties</li>
+          <li>✓ No tracking or profiling beyond device management</li>
+          <li>✓ Encryption in transit (TLS 1.2+) and Ziti overlay</li>
+          <li>✓ Role-based access control via Ziti attributes</li>
+          <li>✓ Data deleted upon device unenrollment</li>
+          <li>✓ Full audit trail in NATS streams</li>
+        </ul>
+      </div>
+
+      <!-- Call to Action -->
+      <div class="button-group">
+        <button class="button button-primary" onclick="copyInstallCommand()">
+          Copy Install Command
+        </button>
+        <a href="https://kontango.io/docs" target="_blank" class="button button-secondary">
+          View Documentation
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>
+        Kontango Platform © 2024 |
+        <a href="https://github.com/KontangoOSS" target="_blank" style="color: #64748b;">GitHub</a> |
+        <a href="https://kontango.io/docs/privacy" target="_blank" style="color: #64748b;">Privacy Policy</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function copyInstallCommand() {
+      const cmd = 'curl -fsSL https://join.kontango.io/install | sh';
+      navigator.clipboard.writeText(cmd).then(() => {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }).catch(() => {
+        alert('Failed to copy. Please copy manually:\n\n' + cmd);
+      });
+    }
+  </script>
+</body>
+</html>
