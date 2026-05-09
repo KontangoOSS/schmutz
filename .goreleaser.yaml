@@ -35,7 +35,7 @@ env:
 before:
   hooks:
     # Sanity check: tests must pass before we cut a release
-    - sh -c "cd src && go test ./..."
+    - sh -c "cd agent && go test ./..."
     # Pre-fetch the upstream ziti CLI for both architectures so the archive
     # step has them available locally. Output goes to build/vendored-ziti/.
     - bash scripts/fetch-ziti.sh
@@ -43,7 +43,7 @@ before:
 builds:
   - id: schmutz
     main: ./cmd/schmutz
-    dir: src
+    dir: agent
     binary: schmutz
     goos: [linux]
     goarch: [amd64, arm64]
