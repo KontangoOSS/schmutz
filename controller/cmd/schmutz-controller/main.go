@@ -24,7 +24,7 @@ func main() {
 		ZitiBin:         envOr("ZITI_BIN", "/opt/kontango/bin/ziti"),
 		CABundlePath:    envOr("CA_BUNDLE_PATH", "/opt/kontango/pki/ca-bundle.pem"),
 		GitHubRelease:   envOr("GITHUB_RELEASE", "https://git.konoss.org/kore/schmutz/releases/latest/download"),
-		GitHubRaw:       envOr("GITHUB_RAW", "https://raw.githubusercontent.com/KontangoOSS/schmutz/main"),
+		GitHubRaw:       envOr("GITHUB_RAW", "https://git.konoss.org/kore/schmutz/raw/branch/main"),
 		ZitiVersion:     os.Getenv("ZITI_VERSION"),  // if empty, "latest" is used
 		ZitiIdentity:    os.Getenv("ZITI_IDENTITY"), // optional — enables dark management API
 		ZitiServiceName: envOr("ZITI_SERVICE_NAME", "schmutz-mgmt"),
@@ -155,7 +155,7 @@ func main() {
 	api.enrollMod = enrollMod // wire after construction — enrollMod depends on clients built above
 
 	mux := http.NewServeMux()
-	routes(mux, api, ziti, enrollMod)
+	routes(mux, api, ziti)
 
 	// --- Start listeners ---
 

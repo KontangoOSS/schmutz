@@ -1,0 +1,22 @@
+[Unit]
+Description=Kontango Enrollment Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/enroll-server
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/kontango/enroll-server.env
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log
+
+[Install]
+WantedBy=multi-user.target

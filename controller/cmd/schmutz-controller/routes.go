@@ -3,17 +3,15 @@ package main
 import (
 	"net/http"
 
-	enrollmod "git.konoss.org/kore/schmutz/controller/internal/controller/enroll"
 	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // routes registers all API endpoints on the given mux.
-func routes(mux *http.ServeMux, api *API, ziti *service.ZitiService, enrollMod *enrollmod.Module) {
-
-	// --- Enrollment API ---
-	mux.HandleFunc("/api/enroll/stream", enrollMod.HandleSSE)
-	mux.HandleFunc("/api/ws/enroll", enrollMod.HandleWebSocket)
-	mux.HandleFunc("/install", enrollMod.HandleInstall)
+//
+// Enrollment is handled by schmutz-enroll (enroll-server), not this binary.
+// /api/v1/enroll and /api/enroll are served on enroll.kontango.net → port 8765.
+// This controller handles management plane APIs only.
+func routes(mux *http.ServeMux, api *API, ziti *service.ZitiService) {
 
 	// --- Landing pages ---
 	mux.HandleFunc("/", api.LandingPage)

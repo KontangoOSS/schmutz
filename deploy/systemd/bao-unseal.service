@@ -1,0 +1,13 @@
+[Unit]
+Description=Auto-unseal Kontango Bao at boot
+After=bao.service
+Requires=bao.service
+ConditionFileNotEmpty=/etc/kontango/bao-unseal.keys
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bao-unseal.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

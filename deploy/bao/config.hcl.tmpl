@@ -1,0 +1,28 @@
+# /etc/kontango/bao/config.hcl — generated from this template per controller
+# Substitute @@NODE_NAME@@ and @@NODE_PUBLIC_IP@@ at deploy time.
+
+storage "raft" {
+  path    = "/var/lib/bao"
+  node_id = "@@NODE_NAME@@"
+}
+
+# Listener binds to loopback only. Caddy fronts external TLS at
+# secrets.kontango.net:443 → :9443 (LE cert) → 127.0.0.1:8200 (this).
+listener "tcp" {
+  address     = "127.0.0.1:8200"
+  tls_disable = true
+}
+
+# Cluster address is what other Raft peers dial. Public IP because Bao
+# Raft replicates between controllers across the public internet (UFW
+# allows :8201 only from peer IPs).
+cluster_addr = "https://@@NODE_PUBLIC_IP@@:8201"
+api_addr     = "http://127.0.0.1:8200"
+
+ui = false
+
+# disable_mlock: required because we don't grant IPC_LOCK capability via
+# systemd hardening. Standard for Bao on Linux when not running with
+# privileged caps. See:
+# https://openbao.org/docs/configuration/#disable_mlock
+disable_mlock = true

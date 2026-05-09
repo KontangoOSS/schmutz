@@ -1,0 +1,24 @@
+[Unit]
+Description=Schmutz Controller — management plane API
+After=network.target
+# Depends on enroll-server for enrollment operations
+Wants=enroll-server.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/schmutz-controller
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/kontango/schmutz-controller.env
+StandardOutput=journal
+StandardError=journal
+
+# Hardening (same as enroll-server)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log
+
+[Install]
+WantedBy=multi-user.target

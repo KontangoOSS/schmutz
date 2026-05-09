@@ -1,0 +1,21 @@
+[Unit]
+Description=Kontango Bao HA Server
+After=network.target
+ConditionFileNotEmpty=/etc/kontango/bao/config.hcl
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/bao server -config=/etc/kontango/bao/config.hcl
+ExecReload=/bin/kill --signal HUP $MAINPID
+KillMode=process
+KillSignal=SIGINT
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitMEMLOCK=infinity
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
