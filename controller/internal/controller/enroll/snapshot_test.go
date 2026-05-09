@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
 )
 
 func TestBuildSnapshot_ContainsRequiredFields(t *testing.T) {

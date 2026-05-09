@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/discover"
+	"git.konoss.org/kore/schmutz/agent/internal/discover"
 )
 
 func TestScanLocalhost_ReturnsResults(t *testing.T) {

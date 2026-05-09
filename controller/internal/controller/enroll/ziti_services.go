@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
 )
 
 // genED25519Key returns an authorized_keys-format public key and PEM-encoded private key.

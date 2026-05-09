@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/join"
-	"github.com/KontangoOSS/schmutz/agent/pkg/schmutz/discovery"
+	"git.konoss.org/kore/schmutz/agent/internal/join"
+	"git.konoss.org/kore/schmutz/agent/pkg/schmutz/discovery"
 	ziti "github.com/openziti/sdk-golang/ziti"
 	zitiEnroll "github.com/openziti/sdk-golang/ziti/enroll"
 )

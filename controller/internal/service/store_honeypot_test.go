@@ -3,7 +3,7 @@ package service_test
 import (
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 func TestHoneypotRoundtrip(t *testing.T) {

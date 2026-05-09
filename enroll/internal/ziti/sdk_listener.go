@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/identity"
+	"git.konoss.org/kore/schmutz/enroll/internal/identity"
 	zsdk "github.com/openziti/sdk-golang/ziti"
 	"github.com/openziti/sdk-golang/ziti/edge"
 )

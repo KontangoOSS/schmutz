@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/agent"
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/agent"
+	"git.konoss.org/kore/schmutz/agent/root"
 )
 
 func TestNewAgent_requiresEnabledRoot(t *testing.T) {

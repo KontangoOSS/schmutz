@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/audit"
+	"git.konoss.org/kore/schmutz/enroll/internal/audit"
 )
 
 type fixedQuerier struct {

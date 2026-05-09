@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/root"
 	"github.com/spf13/cobra"
 )
 

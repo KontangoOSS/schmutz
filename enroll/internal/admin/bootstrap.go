@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/audit"
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/enroll/internal/ziti"
+	"git.konoss.org/kore/schmutz/enroll/internal/audit"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/ziti"
 )
 
 // CommandExecutor runs an external binary. The bootstrap mode subprocesses

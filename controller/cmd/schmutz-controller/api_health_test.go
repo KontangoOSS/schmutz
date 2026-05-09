@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // TestMain sets VAULT_MAX_RETRIES=0 so that tests using an unreachable Bao address

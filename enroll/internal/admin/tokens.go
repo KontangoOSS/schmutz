@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/audit"
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/enroll/internal/identity"
+	"git.konoss.org/kore/schmutz/enroll/internal/audit"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/identity"
 )
 
 type TokensHandler struct {

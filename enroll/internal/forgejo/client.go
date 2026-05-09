@@ -26,7 +26,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // ErrNotFound is returned when the requested resource does not exist

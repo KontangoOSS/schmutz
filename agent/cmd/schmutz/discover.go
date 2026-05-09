@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/discover"
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/internal/discover"
+	"git.konoss.org/kore/schmutz/agent/root"
 	"github.com/spf13/cobra"
 )
 

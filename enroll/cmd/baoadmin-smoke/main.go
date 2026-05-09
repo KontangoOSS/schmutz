@@ -16,7 +16,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
 )
 
 func main() {

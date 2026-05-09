@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/enroll"
+	"git.konoss.org/kore/schmutz/agent/internal/enroll"
 )
 
 func TestNeedsEnrollment_noFile(t *testing.T) {

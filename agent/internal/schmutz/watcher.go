@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // WatcherConfig configures the in-process poll loop.

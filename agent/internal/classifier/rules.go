@@ -4,7 +4,7 @@ import (
 	"net"
 	"path/filepath"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/config"
+	"git.konoss.org/kore/schmutz/agent/internal/config"
 )
 
 // Match checks if a connection matches a rule based on SNI, JA4, and source IP.

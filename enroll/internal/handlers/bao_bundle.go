@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
 )
 
 // BaoBundleHandler issues install bundles for the bao-jwt agent flow.

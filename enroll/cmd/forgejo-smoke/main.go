@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/forgejo"
+	"git.konoss.org/kore/schmutz/enroll/internal/forgejo"
 )
 
 func main() {

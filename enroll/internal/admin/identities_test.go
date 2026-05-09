@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/audit"
-	"github.com/KontangoOSS/schmutz/enroll/internal/identity"
-	"github.com/KontangoOSS/schmutz/enroll/internal/ziti"
+	"git.konoss.org/kore/schmutz/enroll/internal/audit"
+	"git.konoss.org/kore/schmutz/enroll/internal/identity"
+	"git.konoss.org/kore/schmutz/enroll/internal/ziti"
 )
 
 type mockZiti struct {

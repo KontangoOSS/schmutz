@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // planLog returns a multi-line, log-ready description of the

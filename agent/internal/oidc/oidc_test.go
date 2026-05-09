@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/oidc"
+	"git.konoss.org/kore/schmutz/agent/internal/oidc"
 )
 
 func TestToken_clientCredentials(t *testing.T) {

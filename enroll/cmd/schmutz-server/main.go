@@ -16,11 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/admin"
-	"github.com/KontangoOSS/schmutz/enroll/internal/audit"
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/enroll/internal/config"
-	"github.com/KontangoOSS/schmutz/enroll/internal/ziti"
+	"git.konoss.org/kore/schmutz/enroll/internal/admin"
+	"git.konoss.org/kore/schmutz/enroll/internal/audit"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/config"
+	"git.konoss.org/kore/schmutz/enroll/internal/ziti"
 )
 
 const Version = "0.1.0"

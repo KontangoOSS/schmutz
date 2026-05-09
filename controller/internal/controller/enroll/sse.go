@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/profiles"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/profiles"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
 )
 
 var EnrollTagMu sync.Mutex

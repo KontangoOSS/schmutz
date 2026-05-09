@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	agentmod "github.com/KontangoOSS/schmutz/controller/internal/controller/agent"
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	agentmod "git.konoss.org/kore/schmutz/controller/internal/controller/agent"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // Heartbeat handles POST /api/heartbeat.

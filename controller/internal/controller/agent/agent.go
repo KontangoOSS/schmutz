@@ -17,7 +17,7 @@ import (
 
 	"github.com/openziti/sdk-golang/ziti/edge"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // HelloPayload is what the agent receives on connect and in every heartbeat response.

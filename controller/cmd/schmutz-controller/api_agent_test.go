@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // newAgentTestAPI returns an API with telemetry wired up (required by Heartbeat/LiveMachines/PushInstruction).

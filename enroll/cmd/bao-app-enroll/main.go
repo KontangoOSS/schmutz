@@ -46,9 +46,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/shared"
-	"github.com/KontangoOSS/schmutz/enroll/internal/ziti"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/shared"
+	"git.konoss.org/kore/schmutz/enroll/internal/ziti"
 )
 
 func main() {

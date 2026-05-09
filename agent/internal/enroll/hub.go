@@ -30,7 +30,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/baojwt"
+	"git.konoss.org/kore/schmutz/agent/internal/baojwt"
 )
 
 // HubEnrollConfig is everything RegisterHub needs.

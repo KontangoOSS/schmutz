@@ -3,7 +3,7 @@ package verify
 import (
 	"strings"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // DownloadRecord is the appetizer captured at binary download time.

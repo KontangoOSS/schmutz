@@ -1,4 +1,4 @@
-module github.com/KontangoOSS/schmutz/enroll
+module git.konoss.org/kore/schmutz/enroll
 
 go 1.25.5
 
@@ -94,6 +94,7 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	nhooyr.io/websocket v1.8.17 // indirect
 )

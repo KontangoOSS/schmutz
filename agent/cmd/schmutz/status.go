@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/enroll"
-	"github.com/KontangoOSS/schmutz/agent/pkg/schmutz/discovery"
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/internal/enroll"
+	"git.konoss.org/kore/schmutz/agent/pkg/schmutz/discovery"
+	"git.konoss.org/kore/schmutz/agent/root"
 	"github.com/spf13/cobra"
 )
 

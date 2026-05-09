@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/discover"
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/agent/internal/discover"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // AgentInfo carries identity fields from /etc/schmutz/agent.json.

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // CachedClient wraps a Client and caches ListApps results for ttl duration.

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
 )
 
 // Module holds the SDK clients. Stateless — all state is in Bao/Ziti.

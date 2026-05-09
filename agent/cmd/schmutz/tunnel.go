@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/enroll"
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/internal/enroll"
+	"git.konoss.org/kore/schmutz/agent/root"
 	"github.com/spf13/cobra"
 )
 

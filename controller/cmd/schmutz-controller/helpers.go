@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // zitiEdgeConn is the interface for edge connections that carry Ziti identity.

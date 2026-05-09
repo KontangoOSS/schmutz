@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/identity"
+	"git.konoss.org/kore/schmutz/enroll/internal/identity"
 )
 
 type errResp struct {

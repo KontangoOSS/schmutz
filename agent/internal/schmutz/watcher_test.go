@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // fakeBao mimics just the substrate-read endpoint. Concurrency-safe so

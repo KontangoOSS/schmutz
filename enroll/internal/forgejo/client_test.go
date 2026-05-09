@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/forgejo"
+	"git.konoss.org/kore/schmutz/enroll/internal/forgejo"
 )
 
 // fakeForgejo is a minimal httptest server that emulates the Forgejo API

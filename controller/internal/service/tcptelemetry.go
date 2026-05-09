@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/stream"
+	"git.konoss.org/kore/schmutz/controller/internal/stream"
 	"github.com/openziti/sdk-golang/ziti/edge"
 )
 

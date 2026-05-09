@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/enroll/internal/config"
-	"github.com/KontangoOSS/schmutz/enroll/internal/forgejo"
-	"github.com/KontangoOSS/schmutz/enroll/internal/handlers"
-	"github.com/KontangoOSS/schmutz/enroll/internal/ziti"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/config"
+	"git.konoss.org/kore/schmutz/enroll/internal/forgejo"
+	"git.konoss.org/kore/schmutz/enroll/internal/handlers"
+	"git.konoss.org/kore/schmutz/enroll/internal/ziti"
 )
 
 const Version = "0.2.0"

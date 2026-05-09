@@ -1,4 +1,4 @@
-module github.com/KontangoOSS/schmutz/shared
+module git.konoss.org/kore/schmutz/shared
 
 go 1.25
 

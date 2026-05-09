@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
 )
 
 // memKV is an in-memory AdminKV for testing.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/config"
+	"git.konoss.org/kore/schmutz/agent/internal/config"
 )
 
 // Result holds the classification decision for a connection.

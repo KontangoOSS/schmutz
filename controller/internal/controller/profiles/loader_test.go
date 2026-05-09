@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/profiles"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/profiles"
 )
 
 func writeYAML(t *testing.T, dir, name, content string) {

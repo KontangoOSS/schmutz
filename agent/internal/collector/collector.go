@@ -5,7 +5,7 @@ package collector
 import (
 	"runtime"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/stream"
+	"git.konoss.org/kore/schmutz/agent/internal/stream"
 	gopsnet "github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"

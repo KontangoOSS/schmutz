@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/baojwt"
+	"git.konoss.org/kore/schmutz/agent/internal/baojwt"
 	"github.com/spf13/cobra"
 )
 

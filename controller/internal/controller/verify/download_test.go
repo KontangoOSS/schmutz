@@ -3,7 +3,7 @@ package verify
 import (
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 func TestVerifyDownload_NilRecord(t *testing.T) {

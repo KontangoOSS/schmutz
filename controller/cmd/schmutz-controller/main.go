@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	agentmod "github.com/KontangoOSS/schmutz/controller/internal/controller/agent"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
-	enrollmod "github.com/KontangoOSS/schmutz/controller/internal/controller/enroll"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/profiles"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	agentmod "git.konoss.org/kore/schmutz/controller/internal/controller/agent"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
+	enrollmod "git.konoss.org/kore/schmutz/controller/internal/controller/enroll"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/profiles"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 		NodeName:        envOr("NODE_NAME", "ctrl-1"),
 		ZitiBin:         envOr("ZITI_BIN", "/opt/kontango/bin/ziti"),
 		CABundlePath:    envOr("CA_BUNDLE_PATH", "/opt/kontango/pki/ca-bundle.pem"),
-		GitHubRelease:   envOr("GITHUB_RELEASE", "https://github.com/KontangoOSS/schmutz/releases/latest/download"),
+		GitHubRelease:   envOr("GITHUB_RELEASE", "https://git.konoss.org/kore/schmutz/releases/latest/download"),
 		GitHubRaw:       envOr("GITHUB_RAW", "https://raw.githubusercontent.com/KontangoOSS/schmutz/main"),
 		ZitiVersion:     os.Getenv("ZITI_VERSION"),  // if empty, "latest" is used
 		ZitiIdentity:    os.Getenv("ZITI_IDENTITY"), // optional — enables dark management API
@@ -244,7 +244,7 @@ type Config struct {
 	NodeName        string
 	ZitiBin         string
 	CABundlePath    string
-	GitHubRelease   string // e.g. https://github.com/KontangoOSS/schmutz/releases/latest/download
+	GitHubRelease   string // e.g. https://git.konoss.org/kore/schmutz/releases/latest/download
 	GitHubRaw       string // e.g. https://raw.githubusercontent.com/KontangoOSS/schmutz/main
 	ZitiVersion     string // ziti binary version to install on agents; empty = "latest"
 	ZitiIdentity    string // path to Ziti identity JSON for hosting the management API as a dark service

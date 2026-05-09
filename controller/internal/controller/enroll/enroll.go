@@ -12,10 +12,10 @@ import (
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/common"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/profiles"
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/common"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/profiles"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // Module handles enrollment conversations.

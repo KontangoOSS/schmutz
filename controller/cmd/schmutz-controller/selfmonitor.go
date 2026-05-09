@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // startSelfMonitor publishes controller health as telemetry frames every 10s.

@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
 )
 
 // HandleInstall serves the install script after fingerprinting the connection.

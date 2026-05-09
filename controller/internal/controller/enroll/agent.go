@@ -14,8 +14,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/controller/verify"
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/controller/verify"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // AgentEnrollRequest is the full enrollment request from a schmutz agent.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
 )
 
 // fakeOIDCAdmin records every call so tests can assert idempotent

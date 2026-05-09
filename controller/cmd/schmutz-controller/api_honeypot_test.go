@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 func testAPI() *API {

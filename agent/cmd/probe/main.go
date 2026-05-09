@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KontangoOSS/schmutz/agent/pkg/schmutz/discovery"
+	"git.konoss.org/kore/schmutz/agent/pkg/schmutz/discovery"
 )
 
 func main() {

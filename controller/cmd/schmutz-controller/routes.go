@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
-	enrollmod "github.com/KontangoOSS/schmutz/controller/internal/controller/enroll"
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	enrollmod "git.konoss.org/kore/schmutz/controller/internal/controller/enroll"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // routes registers all API endpoints on the given mux.

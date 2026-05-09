@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
 )
 
 type healthBao struct{ err error }

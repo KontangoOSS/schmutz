@@ -3,7 +3,7 @@
 package common
 
 import (
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // Clients holds references to the SDK clients. Passed to every module.

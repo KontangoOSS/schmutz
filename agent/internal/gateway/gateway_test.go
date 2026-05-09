@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/gateway"
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/agent/internal/gateway"
+	"git.konoss.org/kore/schmutz/shared"
 )
 
 // fakeSpecServer returns a minimal OpenAPI 3.0 spec at /openapi.json.

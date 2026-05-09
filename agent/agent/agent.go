@@ -5,7 +5,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/KontangoOSS/schmutz/agent/root"
+	"git.konoss.org/kore/schmutz/agent/root"
 )
 
 type AgentConfig struct {

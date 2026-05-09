@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KontangoOSS/schmutz/controller/internal/service"
+	"git.konoss.org/kore/schmutz/controller/internal/service"
 )
 
 // newOpsTestAPI returns an API wired up with all services needed for ops handlers.

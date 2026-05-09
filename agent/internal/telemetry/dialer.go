@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/collector"
-	"github.com/KontangoOSS/schmutz/agent/internal/stream"
+	"git.konoss.org/kore/schmutz/agent/internal/collector"
+	"git.konoss.org/kore/schmutz/agent/internal/stream"
 	"github.com/openziti/sdk-golang/ziti"
 )
 

@@ -1,4 +1,4 @@
-module github.com/KontangoOSS/schmutz/controller
+module git.konoss.org/kore/schmutz/controller
 
 go 1.25.5
 

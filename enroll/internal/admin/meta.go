@@ -6,8 +6,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/KontangoOSS/schmutz/enroll/internal/bao"
-	"github.com/KontangoOSS/schmutz/enroll/internal/identity"
+	"git.konoss.org/kore/schmutz/enroll/internal/bao"
+	"git.konoss.org/kore/schmutz/enroll/internal/identity"
 )
 
 // healthZitiClient is the minimum surface MetaHandler needs from the Ziti client.

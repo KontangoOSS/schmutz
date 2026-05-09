@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/KontangoOSS/schmutz/agent/internal/baojwt"
-	"github.com/KontangoOSS/schmutz/shared"
+	"git.konoss.org/kore/schmutz/agent/internal/baojwt"
+	"git.konoss.org/kore/schmutz/shared"
 	"gopkg.in/yaml.v3"
 )
 
