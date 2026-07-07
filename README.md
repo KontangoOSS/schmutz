@@ -108,6 +108,7 @@ Schmutz is the agent layer of a larger platform. Here's how the pieces fit:
 | `schmutz-enroll` | Enroll-server — the hub API that issues tokens, provisions Ziti identities, and builds Bao bundles |
 | `schmutz-controller` | Controller — manages profiles, trust decisions, and identity approval |
 | `schmutz-shared` | Shared Go types — the wire format for substrates, blueprints, and deployment records |
+| [`schmutz-plugins`](https://github.com/KontangoOSS/schmutz-plugins) | Open-source Woodpecker CI plugins that provision and maintain the machines schmutz runs on |
 
 ---
 
